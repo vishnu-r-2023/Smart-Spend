@@ -9,7 +9,7 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
-mongoose.connect("mongodb://localhost:27017/smartspend")
+mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB connected"));
 
 app.use("/api", uploadRoutes);
