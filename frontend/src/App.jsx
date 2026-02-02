@@ -24,7 +24,7 @@ const SmartSpend = () => {
   useEffect(() => {
     const fetchTransactions = async () => {
       try {
-        const res = await fetch("http://localhost:5000/api/transactions");
+        const res = await fetch("https://smart-spend-ho8v.onrender.com/api/transactions");
         const data = await res.json();
         setTransactions(Array.isArray(data) ? data : []);
       } catch (err) {
@@ -202,12 +202,12 @@ const SmartSpend = () => {
     formData.append("statement", selectedFile);
     try {
       setUploading(true);
-      const res = await fetch("http://localhost:5000/api/upload-statement", {
+      const res = await fetch("https://smart-spend-ho8v.onrender.com/api/upload-statement", {
         method: "POST",
         body: formData
       });
       if (!res.ok) throw new Error("Upload failed");
-      const txRes = await fetch("http://localhost:5000/api/transactions");
+      const txRes = await fetch("https://smart-spend-ho8v.onrender.com/api/transactions");
       const txData = await txRes.json();
       setTransactions(txData);
       setShowUploadModal(false);
