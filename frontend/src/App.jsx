@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut } from 'lucide-react';
+import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut, User, Settings, Shield, Bell, Key, Sparkles, Tags, Camera } from 'lucide-react';
 
 const SmartSpend = () => {
   const API_BASE = process.env.REACT_APP_API_BASE || "https://smart-spend-ho8v.onrender.com/api";
@@ -34,6 +34,36 @@ const SmartSpend = () => {
   const [authError, setAuthError] = useState("");
   const [authProcessing, setAuthProcessing] = useState(false);
 
+  const [profileSection, setProfileSection] = useState("overview");
+  const [profileData, setProfileData] = useState(null);
+  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileForm, setProfileForm] = useState({ name: "", avatarUrl: "" });
+  const [emailForm, setEmailForm] = useState({ email: "", password: "" });
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: "",
+    newPassword: "",
+    confirmPassword: ""
+  });
+  const [notificationForm, setNotificationForm] = useState({
+    weeklySummary: true,
+    budgetAlerts: true,
+    productUpdates: true
+  });
+  const [preferenceForm, setPreferenceForm] = useState({
+    currency: "INR",
+    categoryPrefs: []
+  });
+  const [profileNotice, setProfileNotice] = useState(null);
+  const [accountNotice, setAccountNotice] = useState(null);
+  const [securityNotice, setSecurityNotice] = useState(null);
+  const [prefsNotice, setPrefsNotice] = useState(null);
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [passwordSaving, setPasswordSaving] = useState(false);
+  const [notificationsSaving, setNotificationsSaving] = useState(false);
+  const [prefsSaving, setPrefsSaving] = useState(false);
+  const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+
   const isAuthenticated = authStatus === "authenticated";
 
   const categoryOptions = [
@@ -55,6 +85,39 @@ const SmartSpend = () => {
   const categoryFilters = ["All", ...categoryOptions];
 
   const paymentOptions = ["UPI", "Card", "Cash", "Bank Transfer", "Wallet", "Cheque"];
+
+  const currencyOptions = ["INR", "USD", "EUR", "GBP", "AED", "SGD", "CAD", "AUD"];
+
+  const profileSections = [
+    { id: "overview", label: "Overview", icon: User },
+    { id: "edit", label: "Edit Profile", icon: Camera },
+    { id: "account", label: "Account Settings", icon: Settings },
+    { id: "security", label: "Security", icon: Shield },
+    { id: "preferences", label: "Data & Preferences", icon: Tags }
+  ];
+
+  const authHighlights = [
+    {
+      icon: Sparkles,
+      title: "Expense tracking & analytics",
+      description: "Automated and manual entries flow into clear charts."
+    },
+    {
+      icon: PieIcon,
+      title: "Year & category insights",
+      description: "Instant breakdowns of spending patterns and trends."
+    },
+    {
+      icon: Target,
+      title: "Savings visualization",
+      description: "Track goals with monthly and yearly comparisons."
+    },
+    {
+      icon: Shield,
+      title: "Secure accounts",
+      description: "Token-based sessions protect every update."
+    }
+  ];
   
   const sortedTransactions = [...transactions].sort((a, b) => {
     if (!a.date && !b.date) return 0;
@@ -92,6 +155,32 @@ const SmartSpend = () => {
     }
   };
 
+  const fetchProfile = async (token) => {
+    if (!token) return;
+    try {
+      setProfileLoading(true);
+      const res = await fetch(`${API_BASE}/auth/profile`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleLogout();
+          return;
+        }
+        throw new Error("Failed to fetch profile");
+      }
+      const data = await res.json();
+      if (data?.user) {
+        setProfileData(data.user);
+        setUser(data.user);
+      }
+    } catch (err) {
+      console.warn(err);
+    } finally {
+      setProfileLoading(false);
+    }
+  };
+
   useEffect(() => {
     const initializeAuth = async () => {
       const storedToken = localStorage.getItem("smartspend_token");
@@ -112,6 +201,7 @@ const SmartSpend = () => {
         const data = await res.json();
         setAuthToken(storedToken);
         setUser(data.user);
+        setProfileData(data.user);
         setAuthStatus("authenticated");
       } catch (err) {
         localStorage.removeItem("smartspend_token");
@@ -128,10 +218,32 @@ const SmartSpend = () => {
     if (authStatus !== "authenticated" || !authToken) {
       setTransactions([]);
       setLoading(false);
+      setProfileData(null);
       return;
     }
     fetchTransactions(authToken);
+    fetchProfile(authToken);
   }, [authStatus, authToken]);
+
+  useEffect(() => {
+    if (!profileData) return;
+    setProfileForm({
+      name: profileData.name || "",
+      avatarUrl: profileData.avatarUrl || ""
+    });
+    setEmailForm((prev) => ({ ...prev, email: profileData.email || "" }));
+    setNotificationForm({
+      weeklySummary: profileData.notifications?.weeklySummary ?? true,
+      budgetAlerts: profileData.notifications?.budgetAlerts ?? true,
+      productUpdates: profileData.notifications?.productUpdates ?? true
+    });
+    setPreferenceForm({
+      currency: profileData.currency || "INR",
+      categoryPrefs: Array.isArray(profileData.categoryPrefs)
+        ? profileData.categoryPrefs
+        : []
+    });
+  }, [profileData]);
 
   // Calculate statistics
   const totalIncome = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
@@ -481,6 +593,7 @@ const SmartSpend = () => {
       localStorage.setItem("smartspend_token", data.token);
       setAuthToken(data.token);
       setUser(data.user);
+      setProfileData(data.user);
       setAuthStatus("authenticated");
       setActiveTab("dashboard");
       setAuthForm({ name: "", email: "", password: "" });
@@ -510,6 +623,208 @@ const SmartSpend = () => {
       setActiveTab("dashboard");
       setShowUploadModal(false);
       setShowEntryModal(false);
+    }
+  };
+
+  const formatDateDisplay = (value) => {
+    if (!value) return "--";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "--";
+    return date.toLocaleDateString(undefined, {
+      year: "numeric",
+      month: "short",
+      day: "numeric"
+    });
+  };
+
+  const handleProfileSave = async () => {
+    if (!authToken) return;
+    if (!profileForm.name.trim()) {
+      setProfileNotice({ type: "error", text: "Name cannot be empty" });
+      return;
+    }
+    try {
+      setProfileSaving(true);
+      setProfileNotice(null);
+      const res = await fetch(`${API_BASE}/auth/profile`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          name: profileForm.name.trim(),
+          avatarUrl: profileForm.avatarUrl.trim()
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to update profile");
+      }
+      const data = await res.json();
+      setProfileData(data.user);
+      setUser(data.user);
+      setProfileNotice({ type: "success", text: "Profile updated successfully" });
+    } catch (err) {
+      setProfileNotice({ type: "error", text: err.message || "Failed to update profile" });
+    } finally {
+      setProfileSaving(false);
+    }
+  };
+
+  const handleEmailSave = async () => {
+    if (!authToken) return;
+    if (!emailForm.email || !emailForm.password) {
+      setAccountNotice({ type: "error", text: "Enter email and password" });
+      return;
+    }
+    try {
+      setEmailSaving(true);
+      setAccountNotice(null);
+      const res = await fetch(`${API_BASE}/auth/email`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          email: emailForm.email.trim(),
+          password: emailForm.password
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to update email");
+      }
+      const data = await res.json();
+      setProfileData(data.user);
+      setUser(data.user);
+      setEmailForm({ email: data.user.email, password: "" });
+      setAccountNotice({ type: "success", text: "Email updated successfully" });
+    } catch (err) {
+      setAccountNotice({ type: "error", text: err.message || "Failed to update email" });
+    } finally {
+      setEmailSaving(false);
+    }
+  };
+
+  const handlePasswordSave = async () => {
+    if (!authToken) return;
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      setAccountNotice({ type: "error", text: "Fill in all password fields" });
+      return;
+    }
+    if (passwordForm.newPassword.length < 6) {
+      setAccountNotice({ type: "error", text: "New password must be at least 6 characters" });
+      return;
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      setAccountNotice({ type: "error", text: "Passwords do not match" });
+      return;
+    }
+    try {
+      setPasswordSaving(true);
+      setAccountNotice(null);
+      const res = await fetch(`${API_BASE}/auth/password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          currentPassword: passwordForm.currentPassword,
+          newPassword: passwordForm.newPassword
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to update password");
+      }
+      setPasswordForm({ currentPassword: "", newPassword: "", confirmPassword: "" });
+      setAccountNotice({ type: "success", text: "Password updated successfully" });
+    } catch (err) {
+      setAccountNotice({ type: "error", text: err.message || "Failed to update password" });
+    } finally {
+      setPasswordSaving(false);
+    }
+  };
+
+  const handleNotificationsSave = async () => {
+    if (!authToken) return;
+    try {
+      setNotificationsSaving(true);
+      setAccountNotice(null);
+      const res = await fetch(`${API_BASE}/auth/notifications`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify(notificationForm)
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to update notifications");
+      }
+      const data = await res.json();
+      setProfileData(data.user);
+      setAccountNotice({ type: "success", text: "Notification preferences updated" });
+    } catch (err) {
+      setAccountNotice({ type: "error", text: err.message || "Failed to update notifications" });
+    } finally {
+      setNotificationsSaving(false);
+    }
+  };
+
+  const handlePreferencesSave = async () => {
+    if (!authToken) return;
+    try {
+      setPrefsSaving(true);
+      setPrefsNotice(null);
+      const res = await fetch(`${API_BASE}/auth/preferences`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          currency: preferenceForm.currency,
+          categoryPrefs: preferenceForm.categoryPrefs
+        })
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to update preferences");
+      }
+      const data = await res.json();
+      setProfileData(data.user);
+      setPrefsNotice({ type: "success", text: "Preferences saved" });
+    } catch (err) {
+      setPrefsNotice({ type: "error", text: err.message || "Failed to update preferences" });
+    } finally {
+      setPrefsSaving(false);
+    }
+  };
+
+  const handleLogoutAll = async () => {
+    if (!authToken) return;
+    try {
+      setLogoutAllLoading(true);
+      setSecurityNotice(null);
+      const res = await fetch(`${API_BASE}/auth/logout-all`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to logout all devices");
+      }
+      setSecurityNotice({ type: "success", text: "Logged out from all devices" });
+      handleLogout();
+    } catch (err) {
+      setSecurityNotice({ type: "error", text: err.message || "Failed to logout all devices" });
+    } finally {
+      setLogoutAllLoading(false);
     }
   };
 
@@ -545,6 +860,9 @@ const SmartSpend = () => {
     }
     return null;
   };
+
+  const displayProfile = profileData || user || {};
+  const avatarInitial = displayProfile?.name ? displayProfile.name.trim().charAt(0).toUpperCase() : "U";
 
   return (
     <div className={`app-container ${darkMode ? 'dark' : 'light'}`}>
@@ -1063,6 +1381,216 @@ const SmartSpend = () => {
           color: #EF4444;
         }
 
+        /* ===== PROFILE ===== */
+        .profile-shell {
+          display: grid;
+          grid-template-columns: 280px 1fr;
+          gap: 24px;
+          align-items: start;
+        }
+
+        .profile-sidebar {
+          display: grid;
+          gap: 18px;
+          position: sticky;
+          top: 100px;
+        }
+
+        .profile-card {
+          background: ${darkMode ? 'rgba(30, 41, 59, 0.5)' : '#FFFFFF'};
+          border: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.6)' : 'rgba(226, 232, 240, 1)'};
+          border-radius: 18px;
+          padding: 20px;
+          box-shadow: ${darkMode ? '0 12px 32px rgba(0,0,0,0.25)' : '0 12px 32px rgba(99, 102, 241, 0.06)'};
+        }
+
+        .profile-summary {
+          display: grid;
+          gap: 16px;
+          text-align: center;
+        }
+
+        .profile-avatar {
+          width: 80px;
+          height: 80px;
+          border-radius: 20px;
+          margin: 0 auto;
+          overflow: hidden;
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 800;
+          font-size: 28px;
+          box-shadow: 0 8px 20px rgba(99, 102, 241, 0.35);
+        }
+
+        .profile-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .profile-meta h3 {
+          font-size: 18px;
+          font-weight: 800;
+          margin-bottom: 6px;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .profile-meta p {
+          font-size: 13px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+        }
+
+        .profile-nav {
+          display: grid;
+          gap: 10px;
+        }
+
+        .profile-tab {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          padding: 12px 14px;
+          border-radius: 12px;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 13px;
+          color: ${darkMode ? '#CBD5F5' : '#475569'};
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.4)' : '#F1F5F9'};
+          transition: all 0.2s ease;
+        }
+
+        .profile-tab.active {
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+          color: ${darkMode ? '#F8FAFC' : '#1E293B'};
+          border: 1px solid rgba(99, 102, 241, 0.35);
+        }
+
+        .profile-content {
+          display: grid;
+          gap: 20px;
+        }
+
+        .profile-panel {
+          animation: fadeIn 0.25s ease;
+        }
+
+        .profile-section-title {
+          font-size: 16px;
+          font-weight: 800;
+          margin-bottom: 12px;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .profile-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+        }
+
+        .profile-field {
+          display: grid;
+          gap: 6px;
+          font-size: 13px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+        }
+
+        .profile-field strong {
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+          font-size: 14px;
+        }
+
+        .toggle-row {
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 12px;
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.25)'};
+        }
+
+        .toggle {
+          width: 44px;
+          height: 24px;
+          border-radius: 999px;
+          background: rgba(148, 163, 184, 0.5);
+          position: relative;
+          cursor: pointer;
+          transition: background 0.2s ease;
+        }
+
+        .toggle::after {
+          content: '';
+          position: absolute;
+          width: 18px;
+          height: 18px;
+          border-radius: 999px;
+          background: white;
+          top: 3px;
+          left: 3px;
+          transition: transform 0.2s ease;
+        }
+
+        .toggle.active {
+          background: #6366F1;
+        }
+
+        .toggle.active::after {
+          transform: translateX(20px);
+        }
+
+        .pref-chips {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 10px;
+        }
+
+        .pref-chip {
+          padding: 8px 14px;
+          border-radius: 999px;
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(148, 163, 184, 0.3)'};
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.6)' : '#F1F5F9'};
+          font-size: 12px;
+          font-weight: 700;
+          cursor: pointer;
+          color: ${darkMode ? '#E2E8F0' : '#475569'};
+          transition: all 0.2s ease;
+        }
+
+        .pref-chip.active {
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          color: #FFFFFF;
+          border-color: transparent;
+        }
+
+        .status-banner {
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 13px;
+          font-weight: 600;
+          margin-bottom: 16px;
+        }
+
+        .status-banner.success {
+          background: ${darkMode ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)'};
+          color: #10B981;
+          border: 1px solid rgba(16, 185, 129, 0.35);
+        }
+
+        .status-banner.error {
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+          color: #EF4444;
+          border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+
         .transaction-amount .category {
           font-size: 11px;
           color: ${darkMode ? '#94A3B8' : '#64748B'};
@@ -1490,13 +2018,86 @@ const SmartSpend = () => {
         }
 
         .auth-highlight {
-          padding: 12px 14px;
-          border-radius: 14px;
-          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.9)'};
+          padding: 14px 16px;
+          border-radius: 16px;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.95)'};
           border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.25)'};
+          display: flex;
+          gap: 12px;
+          align-items: flex-start;
           font-size: 13px;
           font-weight: 600;
           color: ${darkMode ? '#CBD5F5' : '#475569'};
+        }
+
+        .auth-highlight-icon {
+          width: 34px;
+          height: 34px;
+          border-radius: 10px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          background: linear-gradient(135deg, rgba(99, 102, 241, 0.7), rgba(139, 92, 246, 0.7));
+          color: #FFFFFF;
+          flex-shrink: 0;
+        }
+
+        .auth-highlight-title {
+          font-size: 13px;
+          font-weight: 700;
+          margin-bottom: 4px;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .auth-highlight-desc {
+          font-size: 12px;
+          font-weight: 500;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+          line-height: 1.5;
+        }
+
+        .auth-orb {
+          position: absolute;
+          border-radius: 999px;
+          filter: blur(0px);
+          opacity: 0.5;
+          z-index: 0;
+        }
+
+        .auth-hero {
+          position: relative;
+          overflow: hidden;
+        }
+
+        .auth-hero h2,
+        .auth-hero p,
+        .auth-highlights {
+          position: relative;
+          z-index: 1;
+        }
+
+        .auth-orb.orb-1 {
+          width: 140px;
+          height: 140px;
+          background: radial-gradient(circle, rgba(99, 102, 241, 0.5), transparent 70%);
+          top: -40px;
+          right: -20px;
+        }
+
+        .auth-orb.orb-2 {
+          width: 120px;
+          height: 120px;
+          background: radial-gradient(circle, rgba(16, 185, 129, 0.4), transparent 70%);
+          bottom: 20px;
+          left: -30px;
+        }
+
+        .auth-orb.orb-3 {
+          width: 90px;
+          height: 90px;
+          background: radial-gradient(circle, rgba(245, 158, 11, 0.35), transparent 70%);
+          bottom: -20px;
+          right: 20px;
         }
 
         .auth-card {
@@ -1651,6 +2252,18 @@ const SmartSpend = () => {
           .action-buttons {
             grid-template-columns: 1fr;
           }
+
+          .profile-shell {
+            grid-template-columns: 1fr;
+          }
+
+          .profile-sidebar {
+            position: static;
+          }
+
+          .profile-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 480px) {
@@ -1701,15 +2314,29 @@ const SmartSpend = () => {
           ) : (
             <div className="auth-shell">
               <div className="auth-hero">
+                <div className="auth-orb orb-1" />
+                <div className="auth-orb orb-2" />
+                <div className="auth-orb orb-3" />
                 <h2>SmartSpend, simplified.</h2>
                 <p>
                   Track expenses, visualize trends, and keep every manual entry in sync with
                   your charts. Your dashboard stays clean, fast, and personalized.
                 </p>
                 <div className="auth-highlights">
-                  <div className="auth-highlight">Real-time updates across charts</div>
-                  <div className="auth-highlight">Bank uploads + manual entries together</div>
-                  <div className="auth-highlight">Private, token-based access</div>
+                  {authHighlights.map((item) => {
+                    const Icon = item.icon;
+                    return (
+                      <div key={item.title} className="auth-highlight">
+                        <div className="auth-highlight-icon">
+                          <Icon size={18} />
+                        </div>
+                        <div>
+                          <div className="auth-highlight-title">{item.title}</div>
+                          <div className="auth-highlight-desc">{item.description}</div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -2249,21 +2876,361 @@ const SmartSpend = () => {
 
         {activeTab === 'profile' && (
           <>
-            <div className="section-title">Profile & Settings</div>
-            <div className="chart-card" style={{ textAlign: 'center', padding: '48px' }}>
-              <div style={{ fontSize: '80px', marginBottom: '24px' }}>👤</div>
-              <h2 style={{ fontSize: '28px', fontWeight: '800', fontFamily: 'Outfit', marginBottom: '8px' }}>{user?.name || "User"}</h2>
-              <p style={{ color: darkMode ? '#94A3B8' : '#64748B', marginBottom: '40px', fontSize: '15px' }}>{user?.email || "user@smartspend.ai"}</p>
-              
-              <div style={{ display: 'grid', gap: '14px', maxWidth: '400px', margin: '0 auto' }}>
-                <button className="btn btn-primary">Account Settings</button>
-                <button className="btn btn-secondary">Privacy & Security</button>
-                <button className="btn btn-secondary">Export Data</button>
-                <button className="btn btn-secondary" style={{ color: '#EF4444', fontWeight: 700 }} onClick={handleLogout}>
-                  <LogOut size={16} />
-                  Logout
-                </button>
-              </div>
+            <div className="section-title">Account Dashboard</div>
+            <div className="profile-shell">
+              <aside className="profile-sidebar">
+                <div className="profile-card profile-summary">
+                  <div className="profile-avatar">
+                    {displayProfile.avatarUrl ? (
+                      <img src={displayProfile.avatarUrl} alt={displayProfile.name || "Profile"} />
+                    ) : (
+                      avatarInitial
+                    )}
+                  </div>
+                  <div className="profile-meta">
+                    <h3>{displayProfile.name || "User"}</h3>
+                    <p>{displayProfile.email || "user@smartspend.ai"}</p>
+                    <p>Joined {formatDateDisplay(displayProfile.createdAt)}</p>
+                  </div>
+                </div>
+
+                <div className="profile-card">
+                  <div className="profile-nav">
+                    {profileSections.map((section) => {
+                      const Icon = section.icon;
+                      return (
+                        <div
+                          key={section.id}
+                          className={`profile-tab ${profileSection === section.id ? "active" : ""}`}
+                          onClick={() => {
+                            setProfileSection(section.id);
+                            setProfileNotice(null);
+                            setAccountNotice(null);
+                            setSecurityNotice(null);
+                            setPrefsNotice(null);
+                          }}
+                        >
+                          <Icon size={16} />
+                          {section.label}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                <div className="profile-card">
+                  <button className="btn btn-secondary" onClick={handleLogout}>
+                    <LogOut size={16} />
+                    Logout
+                  </button>
+                </div>
+              </aside>
+
+              <section className="profile-content">
+                {profileSection === "overview" && (
+                  <div className="profile-panel">
+                    <div className="profile-card">
+                      <div className="profile-section-title">
+                        <User size={16} />
+                        Profile Summary
+                      </div>
+                      {profileLoading && <div className="form-alert">Loading profile...</div>}
+                      <div className="profile-grid">
+                        <div className="profile-field">
+                          <span>Name</span>
+                          <strong>{displayProfile.name || "--"}</strong>
+                        </div>
+                        <div className="profile-field">
+                          <span>Email</span>
+                          <strong>{displayProfile.email || "--"}</strong>
+                        </div>
+                        <div className="profile-field">
+                          <span>Default Currency</span>
+                          <strong>{displayProfile.currency || "INR"}</strong>
+                        </div>
+                        <div className="profile-field">
+                          <span>Joined</span>
+                          <strong>{formatDateDisplay(displayProfile.createdAt)}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileSection === "edit" && (
+                  <div className="profile-panel">
+                    <div className="profile-card">
+                      <div className="profile-section-title">
+                        <Camera size={16} />
+                        Edit Profile
+                      </div>
+                      {profileNotice && (
+                        <div className={`status-banner ${profileNotice.type}`}>{profileNotice.text}</div>
+                      )}
+                      <div className="form-grid">
+                        <div className="form-field">
+                          <label className="form-label">Full name</label>
+                          <input
+                            className="form-input"
+                            type="text"
+                            value={profileForm.name}
+                            onChange={(e) => setProfileForm({ ...profileForm, name: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label className="form-label">Profile image URL</label>
+                          <input
+                            className="form-input"
+                            type="text"
+                            placeholder="https://"
+                            value={profileForm.avatarUrl}
+                            onChange={(e) => setProfileForm({ ...profileForm, avatarUrl: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="action-buttons">
+                        <button className="btn btn-secondary" onClick={() => fetchProfile(authToken)}>
+                          Reset
+                        </button>
+                        <button className="btn btn-primary" onClick={handleProfileSave} disabled={profileSaving}>
+                          {profileSaving ? "Saving..." : "Save Changes"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileSection === "account" && (
+                  <div className="profile-panel">
+                    <div className="profile-card">
+                      <div className="profile-section-title">
+                        <Settings size={16} />
+                        Account Settings
+                      </div>
+                      {accountNotice && (
+                        <div className={`status-banner ${accountNotice.type}`}>{accountNotice.text}</div>
+                      )}
+                      <div className="form-grid">
+                        <div className="form-field">
+                          <label className="form-label">Update email</label>
+                          <input
+                            className="form-input"
+                            type="email"
+                            value={emailForm.email}
+                            onChange={(e) => setEmailForm({ ...emailForm, email: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label className="form-label">Current password</label>
+                          <input
+                            className="form-input"
+                            type="password"
+                            value={emailForm.password}
+                            onChange={(e) => setEmailForm({ ...emailForm, password: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="action-buttons" style={{ marginBottom: "20px" }}>
+                        <button className="btn btn-primary" onClick={handleEmailSave} disabled={emailSaving}>
+                          {emailSaving ? "Updating..." : "Update Email"}
+                        </button>
+                      </div>
+
+                      <div className="profile-section-title">
+                        <Key size={16} />
+                        Change password
+                      </div>
+                      <div className="form-grid">
+                        <div className="form-field">
+                          <label className="form-label">Current password</label>
+                          <input
+                            className="form-input"
+                            type="password"
+                            value={passwordForm.currentPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, currentPassword: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label className="form-label">New password</label>
+                          <input
+                            className="form-input"
+                            type="password"
+                            value={passwordForm.newPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, newPassword: e.target.value })}
+                          />
+                        </div>
+                        <div className="form-field">
+                          <label className="form-label">Confirm new password</label>
+                          <input
+                            className="form-input"
+                            type="password"
+                            value={passwordForm.confirmPassword}
+                            onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                          />
+                        </div>
+                      </div>
+                      <div className="action-buttons" style={{ marginBottom: "20px" }}>
+                        <button className="btn btn-primary" onClick={handlePasswordSave} disabled={passwordSaving}>
+                          {passwordSaving ? "Updating..." : "Update Password"}
+                        </button>
+                      </div>
+
+                      <div className="profile-section-title">
+                        <Bell size={16} />
+                        Notifications
+                      </div>
+                      <div style={{ display: "grid", gap: "12px" }}>
+                        <div className="toggle-row">
+                          <span>Weekly summary emails</span>
+                          <div
+                            className={`toggle ${notificationForm.weeklySummary ? "active" : ""}`}
+                            onClick={() =>
+                              setNotificationForm({
+                                ...notificationForm,
+                                weeklySummary: !notificationForm.weeklySummary
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="toggle-row">
+                          <span>Budget alerts</span>
+                          <div
+                            className={`toggle ${notificationForm.budgetAlerts ? "active" : ""}`}
+                            onClick={() =>
+                              setNotificationForm({
+                                ...notificationForm,
+                                budgetAlerts: !notificationForm.budgetAlerts
+                              })
+                            }
+                          />
+                        </div>
+                        <div className="toggle-row">
+                          <span>Product updates</span>
+                          <div
+                            className={`toggle ${notificationForm.productUpdates ? "active" : ""}`}
+                            onClick={() =>
+                              setNotificationForm({
+                                ...notificationForm,
+                                productUpdates: !notificationForm.productUpdates
+                              })
+                            }
+                          />
+                        </div>
+                      </div>
+                      <div className="action-buttons">
+                        <button
+                          className="btn btn-primary"
+                          onClick={handleNotificationsSave}
+                          disabled={notificationsSaving}
+                        >
+                          {notificationsSaving ? "Saving..." : "Save Notifications"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileSection === "security" && (
+                  <div className="profile-panel">
+                    <div className="profile-card">
+                      <div className="profile-section-title">
+                        <Shield size={16} />
+                        Security Settings
+                      </div>
+                      {securityNotice && (
+                        <div className={`status-banner ${securityNotice.type}`}>{securityNotice.text}</div>
+                      )}
+                      <div className="profile-grid" style={{ marginBottom: "20px" }}>
+                        <div className="profile-field">
+                          <span>Last login</span>
+                          <strong>{formatDateDisplay(displayProfile.lastLoginAt)}</strong>
+                        </div>
+                        <div className="profile-field">
+                          <span>Last login IP</span>
+                          <strong>{displayProfile.lastLoginIp || "--"}</strong>
+                        </div>
+                        <div className="profile-field">
+                          <span>Active session</span>
+                          <strong>Token-based</strong>
+                        </div>
+                        <div className="profile-field">
+                          <span>Security status</span>
+                          <strong>Protected</strong>
+                        </div>
+                      </div>
+                      <div className="action-buttons">
+                        <button
+                          className="btn btn-secondary"
+                          style={{ color: '#EF4444' }}
+                          onClick={handleLogoutAll}
+                          disabled={logoutAllLoading}
+                        >
+                          {logoutAllLoading ? "Logging out..." : "Logout from all devices"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {profileSection === "preferences" && (
+                  <div className="profile-panel">
+                    <div className="profile-card">
+                      <div className="profile-section-title">
+                        <Tags size={16} />
+                        Data & Preferences
+                      </div>
+                      {prefsNotice && (
+                        <div className={`status-banner ${prefsNotice.type}`}>{prefsNotice.text}</div>
+                      )}
+                      <div className="form-grid">
+                        <div className="form-field">
+                          <label className="form-label">Default currency</label>
+                          <select
+                            className="form-select"
+                            value={preferenceForm.currency}
+                            onChange={(e) =>
+                              setPreferenceForm({ ...preferenceForm, currency: e.target.value })
+                            }
+                          >
+                            {currencyOptions.map((currency) => (
+                              <option key={currency} value={currency}>
+                                {currency}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="form-field">
+                          <label className="form-label">Preferred categories</label>
+                          <div className="pref-chips">
+                            {categoryOptions.map((cat) => {
+                              const active = preferenceForm.categoryPrefs.includes(cat);
+                              return (
+                                <div
+                                  key={cat}
+                                  className={`pref-chip ${active ? "active" : ""}`}
+                                  onClick={() => {
+                                    const next = active
+                                      ? preferenceForm.categoryPrefs.filter((item) => item !== cat)
+                                      : [...preferenceForm.categoryPrefs, cat];
+                                    setPreferenceForm({ ...preferenceForm, categoryPrefs: next });
+                                  }}
+                                >
+                                  {cat}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="action-buttons">
+                        <button className="btn btn-primary" onClick={handlePreferencesSave} disabled={prefsSaving}>
+                          {prefsSaving ? "Saving..." : "Save Preferences"}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </section>
             </div>
           </>
         )}

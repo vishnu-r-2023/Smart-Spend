@@ -12,12 +12,15 @@ const authMiddleware = async (req, res, next) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const user = await User.findOne({ sessionToken: token });
+    const user = await User.findOne({
+      $or: [{ "sessionTokens.token": token }, { sessionToken: token }]
+    });
     if (!user) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
     req.user = user;
+    req.token = token;
     next();
   } catch (err) {
     console.error("AUTH ERROR:", err);

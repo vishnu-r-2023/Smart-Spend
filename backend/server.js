@@ -12,6 +12,7 @@ dotenv.config();
 
 app.use(cors());
 app.use(express.json());
+app.set("trust proxy", 1);
 
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log("MongoDB connected"));
