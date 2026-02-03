@@ -994,18 +994,113 @@ const SmartSpend = () => {
         }
 
         .greeting {
+          display: inline-flex;
+          align-items: center;
+          gap: 12px;
+          margin-top: 14px;
+          padding: 10px 14px;
+          border-radius: 14px;
+          background: ${darkMode
+            ? 'linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.7))'
+            : 'linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(248, 250, 252, 0.9))'};
+          border: 1px solid ${darkMode ? 'rgba(99, 102, 241, 0.25)' : 'rgba(148, 163, 184, 0.25)'};
+          box-shadow: ${darkMode ? '0 10px 24px rgba(15, 23, 42, 0.5)' : '0 10px 24px rgba(15, 23, 42, 0.08)'};
+          backdrop-filter: blur(16px);
+          animation: greetIn 0.45s ease;
+        }
+
+        @keyframes greetIn {
+          from {
+            opacity: 0;
+            transform: translateY(6px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+
+        .greeting-avatar {
+          width: 38px;
+          height: 38px;
+          border-radius: 12px;
+          overflow: hidden;
           display: flex;
           align-items: center;
-          gap: 6px;
-          margin-top: 10px;
-          font-size: 12px;
+          justify-content: center;
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          color: #FFFFFF;
+          font-weight: 800;
+          font-size: 16px;
+          box-shadow: 0 8px 18px rgba(99, 102, 241, 0.35);
+          flex-shrink: 0;
+        }
+
+        .greeting-avatar img {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+        }
+
+        .greeting-copy {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          line-height: 1.1;
+        }
+
+        .greeting-text {
+          font-size: 11px;
           font-weight: 600;
+          letter-spacing: 0.6px;
+          text-transform: uppercase;
           color: ${darkMode ? '#94A3B8' : '#64748B'};
         }
 
         .greeting-name {
-          font-weight: 700;
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          font-weight: 800;
+          font-size: 16px;
           color: ${darkMode ? '#E2E8F0' : '#1E293B'};
+        }
+
+        .greeting-username {
+          color: #6366F1;
+        }
+
+        .greeting-status {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 3px 6px;
+          border-radius: 999px;
+          font-size: 9px;
+          font-weight: 700;
+          letter-spacing: 0.5px;
+          text-transform: uppercase;
+          background: ${darkMode ? 'rgba(16, 185, 129, 0.18)' : 'rgba(16, 185, 129, 0.12)'};
+          color: ${darkMode ? '#D1FAE5' : '#047857'};
+          border: 1px solid ${darkMode ? 'rgba(16, 185, 129, 0.35)' : 'rgba(16, 185, 129, 0.25)'};
+          cursor: pointer;
+          transition: all 0.2s ease;
+          outline: none;
+          font-family: 'Inter', sans-serif;
+          line-height: 1;
+        }
+
+        .greeting-status:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 6px 14px rgba(16, 185, 129, 0.25);
+        }
+
+        .status-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 999px;
+          background: #10B981;
+          box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
         }
 
         /* ===== MAIN CONTENT ===== */
@@ -2293,6 +2388,30 @@ const SmartSpend = () => {
           .auth-card {
             padding: 24px;
           }
+
+          .greeting {
+            padding: 8px 10px;
+            gap: 8px;
+          }
+
+          .greeting-avatar {
+            width: 32px;
+            height: 32px;
+            font-size: 14px;
+          }
+
+          .greeting-name {
+            font-size: 14px;
+          }
+
+          .greeting-status {
+            padding: 3px 5px;
+            font-size: 8px;
+          }
+
+          .greeting-status .badge-text {
+            display: none;
+          }
         }
       `}</style>
 
@@ -2423,8 +2542,28 @@ const SmartSpend = () => {
       <div className="tagline">AI-Powered Finance Tracker</div>
 
       <div className="greeting">
-        <span className="greeting-text">Welcome back,</span>
-        <span className="greeting-name"> {user?.name || "there"} 😃</span>
+        <div className="greeting-avatar">
+          {displayProfile?.avatarUrl ? (
+            <img src={displayProfile.avatarUrl} alt={displayProfile?.name || "Profile"} />
+          ) : (
+            (displayProfile?.name ? displayProfile.name.trim().charAt(0).toUpperCase() : "U")
+          )}
+        </div>
+        <div className="greeting-copy">
+          <span className="greeting-text">Welcome back</span>
+          <span className="greeting-name">
+            <span className="greeting-username">{user?.name || "there"}</span>
+            <button
+              type="button"
+              className="greeting-status"
+              title="Account active • Open profile"
+              onClick={() => setActiveTab('profile')}
+            >
+              <span className="status-dot" />
+              <span className="badge-text">Active</span>
+            </button>
+          </span>
+        </div>
       </div>
     </div>
 
