@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import Transaction from "../models/Transaction.js";
 import authMiddleware from "../middleware/auth.js";
 
@@ -52,6 +53,33 @@ router.post("/transactions", authMiddleware, async (req, res) => {
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Failed to create transaction" });
+  }
+});
+
+/**
+ * DELETE a single transaction (user scoped)
+ */
+router.delete("/transactions/:id", authMiddleware, async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!mongoose.isValidObjectId(id)) {
+      return res.status(400).json({ message: "Invalid transaction id" });
+    }
+
+    const deleted = await Transaction.findOneAndDelete({
+      _id: id,
+      userId: req.user._id
+    });
+
+    if (!deleted) {
+      return res.status(404).json({ message: "Transaction not found" });
+    }
+
+    return res.json({ success: true, id: deleted._id });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete transaction" });
   }
 });
 

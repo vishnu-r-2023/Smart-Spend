@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut, User, Settings, Shield, Bell, Key, Sparkles, Tags, Camera } from 'lucide-react';
+import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut, User, Settings, Shield, Bell, Key, Sparkles, Tags, Camera, Trash2 } from 'lucide-react';
 
 const SmartSpend = () => {
   const API_BASE = process.env.REACT_APP_API_BASE || "https://smart-spend-ho8v.onrender.com/api";
@@ -63,6 +63,12 @@ const SmartSpend = () => {
   const [notificationsSaving, setNotificationsSaving] = useState(false);
   const [prefsSaving, setPrefsSaving] = useState(false);
   const [logoutAllLoading, setLogoutAllLoading] = useState(false);
+
+  const [deleteTarget, setDeleteTarget] = useState(null);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteProcessing, setDeleteProcessing] = useState(false);
+  const [deleteError, setDeleteError] = useState("");
+  const [deleteNotice, setDeleteNotice] = useState(null);
 
   const isAuthenticated = authStatus === "authenticated";
 
@@ -639,6 +645,49 @@ const SmartSpend = () => {
       setActiveTab("dashboard");
       setShowUploadModal(false);
       setShowEntryModal(false);
+    }
+  };
+
+  const openDeleteModal = (tx) => {
+    setDeleteTarget(tx);
+    setDeleteError("");
+    setShowDeleteModal(true);
+  };
+
+  const closeDeleteModal = () => {
+    if (deleteProcessing) return;
+    setShowDeleteModal(false);
+    setDeleteTarget(null);
+    setDeleteError("");
+  };
+
+  const handleDeleteTransaction = async () => {
+    if (!authToken || !deleteTarget) return;
+
+    try {
+      setDeleteProcessing(true);
+      setDeleteError("");
+
+      const deleteId = deleteTarget._id || deleteTarget.id;
+      const res = await fetch(`${API_BASE}/transactions/${deleteId}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to delete transaction");
+      }
+
+      setTransactions((prev) => prev.filter((tx) => (tx._id || tx.id) !== deleteId));
+      setShowDeleteModal(false);
+      setDeleteTarget(null);
+      setDeleteNotice({ type: "success", text: "Transaction deleted" });
+      setTimeout(() => setDeleteNotice(null), 3000);
+    } catch (err) {
+      setDeleteError(err.message || "Failed to delete transaction");
+    } finally {
+      setDeleteProcessing(false);
     }
   };
 
@@ -1492,6 +1541,36 @@ const SmartSpend = () => {
           color: #EF4444;
         }
 
+        .transaction-right {
+          display: flex;
+          align-items: center;
+          gap: 14px;
+        }
+
+        .delete-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 10px;
+          border: 1px solid ${darkMode ? 'rgba(239, 68, 68, 0.3)' : 'rgba(239, 68, 68, 0.25)'};
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.08)' : 'rgba(239, 68, 68, 0.06)'};
+          color: ${darkMode ? '#FCA5A5' : '#DC2626'};
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .delete-btn:hover {
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.18)' : 'rgba(239, 68, 68, 0.12)'};
+          transform: translateY(-1px);
+        }
+
+        .delete-btn:disabled {
+          opacity: 0.5;
+          cursor: not-allowed;
+        }
+
         /* ===== PROFILE ===== */
         .profile-shell {
           display: grid;
@@ -1796,6 +1875,57 @@ const SmartSpend = () => {
           padding: 32px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
           animation: slideUp 0.3s ease;
+        }
+
+        .confirm-modal {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.6);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 2200;
+          animation: fadeIn 0.2s ease;
+        }
+
+        .confirm-content {
+          width: 90%;
+          max-width: 420px;
+          background: ${darkMode ? '#1E293B' : '#FFFFFF'};
+          border-radius: 18px;
+          padding: 28px;
+          box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+          animation: slideUp 0.3s ease;
+        }
+
+        .confirm-title {
+          font-size: 20px;
+          font-weight: 800;
+          font-family: 'Outfit', sans-serif;
+          margin-bottom: 8px;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .confirm-text {
+          font-size: 13px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+          margin-bottom: 16px;
+        }
+
+        .confirm-details {
+          padding: 12px 14px;
+          border-radius: 12px;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : '#F8FAFC'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.25)'};
+          margin-bottom: 16px;
+          font-size: 13px;
+          color: ${darkMode ? '#E2E8F0' : '#475569'};
+          display: grid;
+          gap: 6px;
         }
 
         @keyframes slideUp {
@@ -2944,6 +3074,12 @@ const SmartSpend = () => {
               ))}
             </div>
 
+            {deleteNotice && (
+              <div className={`status-banner ${deleteNotice.type}`}>
+                {deleteNotice.text}
+              </div>
+            )}
+
             <div className="chart-card">
               <div className="transaction-list">
                 {sortedTransactions
@@ -2956,7 +3092,7 @@ const SmartSpend = () => {
                       'Health': '🏋️', 'Income': '💵', 'Others': '💳'
                     };
                     return (
-                      <div key={tx.id} className="transaction-item">
+                      <div key={tx._id || tx.id} className="transaction-item">
                         <div className="transaction-left">
                           <div className="transaction-icon" style={{
                             background: tx.amount > 0
@@ -2973,11 +3109,22 @@ const SmartSpend = () => {
                             </p>
                           </div>
                         </div>
-                        <div className="transaction-amount">
-                          <div className={`amount ${tx.amount > 0 ? 'positive' : 'negative'}`}>
-                            {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString()}
+                        <div className="transaction-right">
+                          <div className="transaction-amount">
+                            <div className={`amount ${tx.amount > 0 ? 'positive' : 'negative'}`}>
+                              {tx.amount > 0 ? '+' : ''}₹{Math.abs(tx.amount).toLocaleString()}
+                            </div>
+                            <div className="category">{category}</div>
                           </div>
-                          <div className="category">{category}</div>
+                          <button
+                            className="delete-btn"
+                            title="Delete transaction"
+                            aria-label="Delete transaction"
+                            onClick={() => openDeleteModal(tx)}
+                            disabled={deleteProcessing}
+                          >
+                            <Trash2 size={16} />
+                          </button>
                         </div>
                       </div>
                     );
@@ -3574,6 +3721,34 @@ const SmartSpend = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="confirm-modal" onClick={closeDeleteModal}>
+          <div className="confirm-content" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">Delete this transaction?</div>
+            <div className="confirm-text">This action will remove it from your history and analytics.</div>
+
+            <div className="confirm-details">
+              <div><strong>{deleteTarget?.description || 'Manual entry'}</strong></div>
+              <div>
+                {deleteTarget?.amount > 0 ? '+' : ''}₹{Math.abs(deleteTarget?.amount || 0).toLocaleString()} • {deleteTarget?.date || '--'}
+              </div>
+            </div>
+
+            {deleteError && <div className="form-alert error">{deleteError}</div>}
+
+            <div className="action-buttons">
+              <button className="btn btn-secondary" onClick={closeDeleteModal} disabled={deleteProcessing}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={handleDeleteTransaction} disabled={deleteProcessing}>
+                {deleteProcessing ? "Deleting..." : "Delete"}
+              </button>
+            </div>
           </div>
         </div>
       )}
