@@ -280,8 +280,24 @@ const SmartSpend = () => {
     return "Others";
   };
 
+  const normalizeCategory = (value) => {
+    if (!value || typeof value !== "string") return "";
+    const cleaned = value.trim();
+    if (!cleaned) return "";
+    const lower = cleaned.toLowerCase();
+    const match = categoryOptions.find((option) => option.toLowerCase() === lower);
+    return match || cleaned;
+  };
+
   const resolveCategory = (tx = {}) => {
-    return tx.category || getCategoryFromDescription(tx.description);
+    const rawCategory = normalizeCategory(tx.category);
+    if (tx.source === "manual") {
+      return rawCategory || getCategoryFromDescription(tx.description);
+    }
+    if (!rawCategory || rawCategory === "Others") {
+      return normalizeCategory(getCategoryFromDescription(tx.description));
+    }
+    return rawCategory;
   };
 
   // Category breakdown

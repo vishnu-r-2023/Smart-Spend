@@ -7,6 +7,35 @@ export const parseBankPDF = async (filePath) => {
 
   const tokens = [];
 
+  const getCategoryFromDescription = (desc = "") => {
+    const d = desc.toLowerCase();
+    if (d.includes("zomato") || d.includes("swiggy") || d.includes("restaurant") || d.includes("pizza") || d.includes("coffee"))
+      return "Food & Dining";
+    if (d.includes("uber") || d.includes("ola") || d.includes("metro") || d.includes("petrol"))
+      return "Transportation";
+    if (d.includes("rent") || d.includes("landlord") || d.includes("mortgage"))
+      return "Rent";
+    if (d.includes("flight") || d.includes("hotel") || d.includes("airbnb") || d.includes("travel"))
+      return "Travel";
+    if (d.includes("amazon") || d.includes("flipkart") || d.includes("shopping"))
+      return "Shopping";
+    if (d.includes("netflix") || d.includes("spotify") || d.includes("prime"))
+      return "Subscriptions";
+    if (d.includes("movie") || d.includes("cinema") || d.includes("concert") || d.includes("game"))
+      return "Entertainment";
+    if (d.includes("course") || d.includes("tuition") || d.includes("education") || d.includes("training"))
+      return "Education";
+    if (d.includes("electricity") || d.includes("mobile") || d.includes("bill"))
+      return "Utilities";
+    if (d.includes("gym") || d.includes("health"))
+      return "Health";
+    if (d.includes("sip") || d.includes("mutual fund") || d.includes("investment"))
+      return "Savings";
+    if (d.includes("salary") || d.includes("bonus"))
+      return "Income";
+    return "Others";
+  };
+
   // 1️⃣ Collect ALL text tokens (important)
   for (let p = 1; p <= pdf.numPages; p++) {
     const page = await pdf.getPage(p);
@@ -59,11 +88,14 @@ export const parseBankPDF = async (filePath) => {
 
     const amount = creditAmt > 0 ? creditAmt : -debitAmt;
 
+    const trimmedDescription = description.trim();
+    const category = getCategoryFromDescription(trimmedDescription);
+
     transactions.push({
       date,
-      description: description.trim(),
+      description: trimmedDescription,
       amount,
-      category: "Others",
+      category,
       balance: balanceAmt
     });
   }
