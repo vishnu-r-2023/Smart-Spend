@@ -2,6 +2,7 @@ import express from "express";
 import multer from "multer";
 import fs from "fs";
 import Transaction from "../models/Transaction.js";
+import authMiddleware from "../middleware/auth.js";
 import { parseBankPDF } from "../utils/parseBankPDF.js";
 
 const router = express.Router();
@@ -11,6 +12,7 @@ const upload = multer({ dest: "uploads/" });
 
 router.post(
   "/upload-statement",
+  authMiddleware,
   upload.single("statement"),
   async (req, res) => {
     try {
@@ -35,7 +37,14 @@ router.post(
         return res.status(400).json({ message: "No transactions parsed" });
       }
 
-      const inserted = await Transaction.insertMany(parsedTransactions, {
+      const userId = req.user._id;
+      const withOwner = parsedTransactions.map((tx) => ({
+        ...tx,
+        userId,
+        source: "upload"
+      }));
+
+      const inserted = await Transaction.insertMany(withOwner, {
         ordered: false, // continues even if duplicates exist
       });
 

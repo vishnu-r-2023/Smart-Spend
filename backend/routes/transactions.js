@@ -1,17 +1,57 @@
 import express from "express";
 import Transaction from "../models/Transaction.js";
+import authMiddleware from "../middleware/auth.js";
 
 const router = express.Router();
 
 /**
  * GET all transactions (latest first)
  */
-router.get("/transactions", async (req, res) => {
+router.get("/transactions", authMiddleware, async (req, res) => {
   try {
-    const transactions = await Transaction.find().sort({ date: -1 });
+    const transactions = await Transaction.find({ userId: req.user._id }).sort({ date: -1 });
     res.json(transactions);
   } catch (err) {
     res.status(500).json({ message: "Failed to fetch transactions" });
+  }
+});
+
+/**
+ * POST manual transaction
+ */
+router.post("/transactions", authMiddleware, async (req, res) => {
+  try {
+    const { amount, category, date, paymentMethod, notes, description } = req.body || {};
+
+    if (!amount || !category || !date || !paymentMethod) {
+      return res.status(400).json({ message: "Amount, category, date, and payment method are required" });
+    }
+
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount === 0) {
+      return res.status(400).json({ message: "Amount must be a valid number" });
+    }
+
+    const datePattern = /^\d{2}\/\d{2}\/\d{4}$/;
+    if (!datePattern.test(date)) {
+      return res.status(400).json({ message: "Date must be in DD/MM/YYYY format" });
+    }
+
+    const transaction = await Transaction.create({
+      date,
+      description: (description || notes || `${category} entry`).trim(),
+      amount: parsedAmount,
+      category,
+      paymentMethod,
+      notes: notes || "",
+      source: "manual",
+      userId: req.user._id
+    });
+
+    return res.json(transaction);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to create transaction" });
   }
 });
 
@@ -20,7 +60,7 @@ router.get("/transactions", async (req, res) => {
  * Example: DELETE /transactions/month?month=2&year=2026
  */
 // DELETE transactions by month & year
-router.delete("/transactions", async (req, res) => {
+router.delete("/transactions", authMiddleware, async (req, res) => {
   try {
     const { month, year } = req.query;
 
@@ -37,7 +77,8 @@ router.delete("/transactions", async (req, res) => {
     const regex = new RegExp(`^\\d{2}/${monthStr}/${year}$`);
 
     const result = await Transaction.deleteMany({
-      date: { $regex: regex }
+      date: { $regex: regex },
+      userId: req.user._id
     });
 
     res.json({

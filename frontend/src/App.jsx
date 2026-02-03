@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target } from 'lucide-react';
+import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut } from 'lucide-react';
 
 const SmartSpend = () => {
+  const API_BASE = process.env.REACT_APP_API_BASE || "https://smart-spend-ho8v.onrender.com/api";
   const [darkMode, setDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
@@ -12,8 +13,53 @@ const SmartSpend = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [showEntryModal, setShowEntryModal] = useState(false);
+  const [entryForm, setEntryForm] = useState({
+    type: "expense",
+    amount: "",
+    category: "Food & Dining",
+    date: "",
+    paymentMethod: "UPI",
+    notes: ""
+  });
+  const [entryErrors, setEntryErrors] = useState({});
+  const [entrySubmitting, setEntrySubmitting] = useState(false);
+  const [entrySuccess, setEntrySuccess] = useState("");
+
+  const [authStatus, setAuthStatus] = useState("checking");
+  const [authToken, setAuthToken] = useState(null);
+  const [user, setUser] = useState(null);
+  const [authView, setAuthView] = useState("login");
+  const [authForm, setAuthForm] = useState({ name: "", email: "", password: "" });
+  const [authError, setAuthError] = useState("");
+  const [authProcessing, setAuthProcessing] = useState(false);
+
+  const isAuthenticated = authStatus === "authenticated";
+
+  const categoryOptions = [
+    "Food & Dining",
+    "Transportation",
+    "Rent",
+    "Shopping",
+    "Travel",
+    "Subscriptions",
+    "Utilities",
+    "Savings",
+    "Health",
+    "Entertainment",
+    "Education",
+    "Income",
+    "Others"
+  ];
+
+  const categoryFilters = ["All", ...categoryOptions];
+
+  const paymentOptions = ["UPI", "Card", "Cash", "Bank Transfer", "Wallet", "Cheque"];
   
   const sortedTransactions = [...transactions].sort((a, b) => {
+    if (!a.date && !b.date) return 0;
+    if (!a.date) return 1;
+    if (!b.date) return -1;
     const [d1, m1, y1] = a.date.split("/").map(Number);
     const [d2, m2, y2] = b.date.split("/").map(Number);
     const dateA = new Date(y1, m1 - 1, d1);
@@ -21,22 +67,71 @@ const SmartSpend = () => {
     return dateB - dateA;
   });
 
+  const fetchTransactions = async (token) => {
+    if (!token) return;
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (!res.ok) {
+        if (res.status === 401) {
+          handleLogout();
+          return;
+        }
+        throw new Error("Failed to fetch transactions");
+      }
+      const data = await res.json();
+      setTransactions(Array.isArray(data) ? data : []);
+    } catch (err) {
+      console.error("Backend not reachable");
+      setError("Backend not reachable");
+      setTransactions([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchTransactions = async () => {
+    const initializeAuth = async () => {
+      const storedToken = localStorage.getItem("smartspend_token");
+      if (!storedToken) {
+        setAuthToken(null);
+        setUser(null);
+        setAuthStatus("guest");
+        return;
+      }
+
       try {
-        const res = await fetch("https://smart-spend-ho8v.onrender.com/api/transactions");
+        const res = await fetch(`${API_BASE}/auth/me`, {
+          headers: { Authorization: `Bearer ${storedToken}` }
+        });
+        if (!res.ok) {
+          throw new Error("Session invalid");
+        }
         const data = await res.json();
-        setTransactions(Array.isArray(data) ? data : []);
+        setAuthToken(storedToken);
+        setUser(data.user);
+        setAuthStatus("authenticated");
       } catch (err) {
-        console.error("Backend not reachable");
-        setError("Backend not reachable");
-        setTransactions([]);
-      } finally {
-        setLoading(false);
+        localStorage.removeItem("smartspend_token");
+        setAuthToken(null);
+        setUser(null);
+        setAuthStatus("guest");
       }
     };
-    fetchTransactions();
+
+    initializeAuth();
   }, []);
+
+  useEffect(() => {
+    if (authStatus !== "authenticated" || !authToken) {
+      setTransactions([]);
+      setLoading(false);
+      return;
+    }
+    fetchTransactions(authToken);
+  }, [authStatus, authToken]);
 
   // Calculate statistics
   const totalIncome = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
@@ -50,10 +145,18 @@ const SmartSpend = () => {
       return "Food & Dining";
     if (d.includes("uber") || d.includes("ola") || d.includes("metro") || d.includes("petrol"))
       return "Transportation";
+    if (d.includes("rent") || d.includes("landlord") || d.includes("mortgage"))
+      return "Rent";
+    if (d.includes("flight") || d.includes("hotel") || d.includes("airbnb") || d.includes("travel"))
+      return "Travel";
     if (d.includes("amazon") || d.includes("flipkart") || d.includes("shopping"))
       return "Shopping";
     if (d.includes("netflix") || d.includes("spotify") || d.includes("prime"))
       return "Subscriptions";
+    if (d.includes("movie") || d.includes("cinema") || d.includes("concert") || d.includes("game"))
+      return "Entertainment";
+    if (d.includes("course") || d.includes("tuition") || d.includes("education") || d.includes("training"))
+      return "Education";
     if (d.includes("electricity") || d.includes("mobile") || d.includes("bill"))
       return "Utilities";
     if (d.includes("gym") || d.includes("health"))
@@ -65,11 +168,15 @@ const SmartSpend = () => {
     return "Others";
   };
 
+  const resolveCategory = (tx = {}) => {
+    return tx.category || getCategoryFromDescription(tx.description);
+  };
+
   // Category breakdown
   const categoryData = transactions
     .filter(t => t.amount < 0)
     .reduce((acc, t) => {
-      const category = getCategoryFromDescription(t.description);
+      const category = resolveCategory(t);
       const existing = acc.find(item => item.name === category);
       if (existing) {
         existing.value += Math.abs(t.amount);
@@ -158,7 +265,7 @@ const SmartSpend = () => {
   const totalCategoryExpenses = categoryData.reduce((sum, cat) => sum + cat.value, 0);
   const categoryPercentageData = categoryData.map(cat => ({
     ...cat,
-    percentage: ((cat.value / totalCategoryExpenses) * 100).toFixed(1)
+    percentage: totalCategoryExpenses > 0 ? ((cat.value / totalCategoryExpenses) * 100).toFixed(1) : "0.0"
   }));
 
   // Savings vs Spending comparison
@@ -198,18 +305,26 @@ const SmartSpend = () => {
 
   const handleFileUpload = async () => {
     if (!selectedFile) return alert("Please select a file");
+    if (!authToken) return alert("Please login to upload statements");
     const formData = new FormData();
     formData.append("statement", selectedFile);
     try {
       setUploading(true);
-      const res = await fetch("https://smart-spend-ho8v.onrender.com/api/upload-statement", {
+      const res = await fetch(`${API_BASE}/upload-statement`, {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`
+        },
         body: formData
       });
       if (!res.ok) throw new Error("Upload failed");
-      const txRes = await fetch("https://smart-spend-ho8v.onrender.com/api/transactions");
+      const txRes = await fetch(`${API_BASE}/transactions`, {
+        headers: {
+          Authorization: `Bearer ${authToken}`
+        }
+      });
       const txData = await txRes.json();
-      setTransactions(txData);
+      setTransactions(Array.isArray(txData) ? txData : []);
       setShowUploadModal(false);
       setSelectedFile(null);
     } catch (err) {
@@ -217,6 +332,184 @@ const SmartSpend = () => {
       console.error(err);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const getTodayInputDate = () => {
+    const now = new Date();
+    const local = new Date(now.getTime() - now.getTimezoneOffset() * 60000);
+    return local.toISOString().slice(0, 10);
+  };
+
+  const formatDateForApi = (value) => {
+    if (!value) return "";
+    if (value.includes("/")) return value;
+    const [year, month, day] = value.split("-");
+    if (!year || !month || !day) return value;
+    return `${day}/${month}/${year}`;
+  };
+
+  const openEntryModal = () => {
+    setEntryErrors({});
+    setEntrySuccess("");
+    setEntryForm((prev) => ({
+      ...prev,
+      date: getTodayInputDate()
+    }));
+    setShowEntryModal(true);
+  };
+
+  const closeEntryModal = () => {
+    setShowEntryModal(false);
+    setEntryErrors({});
+    setEntrySuccess("");
+  };
+
+  const handleManualSubmit = async (event) => {
+    event.preventDefault();
+    const errors = {};
+
+    if (!entryForm.amount || Number(entryForm.amount) <= 0) {
+      errors.amount = "Enter a valid amount";
+    }
+    if (!entryForm.category) {
+      errors.category = "Select a category";
+    }
+    if (!entryForm.date) {
+      errors.date = "Choose a date";
+    }
+    if (!entryForm.paymentMethod) {
+      errors.paymentMethod = "Select a payment method";
+    }
+
+    if (Object.keys(errors).length > 0) {
+      setEntryErrors(errors);
+      return;
+    }
+
+    if (!authToken) {
+      setEntryErrors({ form: "Please login to add entries" });
+      return;
+    }
+
+    const amountValue = Number(entryForm.amount);
+    const signedAmount =
+      entryForm.type === "expense" ? -Math.abs(amountValue) : Math.abs(amountValue);
+    const formattedDate = formatDateForApi(entryForm.date);
+    const notes = entryForm.notes?.trim();
+    const description =
+      notes && notes.length > 0
+        ? notes
+        : `${entryForm.type === "expense" ? "Expense" : "Income"} • ${entryForm.category}`;
+
+    try {
+      setEntrySubmitting(true);
+      setEntryErrors({});
+      setEntrySuccess("");
+      const res = await fetch(`${API_BASE}/transactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${authToken}`
+        },
+        body: JSON.stringify({
+          amount: signedAmount,
+          category: entryForm.category,
+          date: formattedDate,
+          paymentMethod: entryForm.paymentMethod,
+          notes: notes || "",
+          description
+        })
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to save entry");
+      }
+
+      const created = await res.json();
+      setTransactions((prev) => [created, ...prev]);
+      setEntrySuccess("Entry added successfully");
+      setEntryForm({
+        type: entryForm.type,
+        amount: "",
+        category: entryForm.category,
+        date: getTodayInputDate(),
+        paymentMethod: entryForm.paymentMethod,
+        notes: ""
+      });
+    } catch (err) {
+      setEntryErrors({ form: err.message || "Failed to save entry" });
+    } finally {
+      setEntrySubmitting(false);
+    }
+  };
+
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+    setAuthError("");
+
+    if (!authForm.email || !authForm.password) {
+      setAuthError("Email and password are required");
+      return;
+    }
+
+    if (authView === "register" && !authForm.name) {
+      setAuthError("Name is required for registration");
+      return;
+    }
+
+    try {
+      setAuthProcessing(true);
+      const payload =
+        authView === "register"
+          ? { name: authForm.name, email: authForm.email, password: authForm.password }
+          : { email: authForm.email, password: authForm.password };
+
+      const res = await fetch(`${API_BASE}/auth/${authView}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Authentication failed");
+      }
+
+      const data = await res.json();
+      localStorage.setItem("smartspend_token", data.token);
+      setAuthToken(data.token);
+      setUser(data.user);
+      setAuthStatus("authenticated");
+      setActiveTab("dashboard");
+      setAuthForm({ name: "", email: "", password: "" });
+    } catch (err) {
+      setAuthError(err.message || "Authentication failed");
+    } finally {
+      setAuthProcessing(false);
+    }
+  };
+
+  const handleLogout = async () => {
+    try {
+      if (authToken) {
+        await fetch(`${API_BASE}/auth/logout`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${authToken}` }
+        });
+      }
+    } catch (err) {
+      console.warn("Logout failed", err);
+    } finally {
+      localStorage.removeItem("smartspend_token");
+      setAuthToken(null);
+      setUser(null);
+      setAuthStatus("guest");
+      setTransactions([]);
+      setActiveTab("dashboard");
+      setShowUploadModal(false);
+      setShowEntryModal(false);
     }
   };
 
@@ -333,6 +626,7 @@ const SmartSpend = () => {
           display: flex;
           gap: 10px;
           align-items: center;
+          flex-wrap: wrap;
         }
 
         .icon-btn {
@@ -357,6 +651,43 @@ const SmartSpend = () => {
 
         .icon-btn:active {
           transform: translateY(0);
+        }
+
+        .primary-action {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 10px 14px;
+          border-radius: 12px;
+          border: none;
+          cursor: pointer;
+          font-weight: 700;
+          font-size: 13px;
+          color: #FFFFFF;
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          box-shadow: 0 6px 18px rgba(99, 102, 241, 0.35);
+          transition: all 0.2s ease;
+          font-family: 'Inter', sans-serif;
+        }
+
+        .primary-action:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 8px 22px rgba(99, 102, 241, 0.45);
+        }
+
+        .greeting {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          margin-top: 10px;
+          font-size: 12px;
+          font-weight: 600;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+        }
+
+        .greeting-name {
+          font-weight: 700;
+          color: ${darkMode ? '#E2E8F0' : '#1E293B'};
         }
 
         /* ===== MAIN CONTENT ===== */
@@ -485,6 +816,19 @@ const SmartSpend = () => {
           align-items: center;
           gap: 12px;
           color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .section-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          margin-bottom: 20px;
+          flex-wrap: wrap;
+        }
+
+        .section-header .section-title {
+          margin-bottom: 0;
         }
 
         .insights-grid {
@@ -783,7 +1127,8 @@ const SmartSpend = () => {
         }
 
         /* ===== MODAL ===== */
-        .upload-modal {
+        .upload-modal,
+        .entry-modal {
           position: fixed;
           top: 0;
           left: 0;
@@ -803,7 +1148,8 @@ const SmartSpend = () => {
           to { opacity: 1; }
         }
 
-        .upload-content {
+        .upload-content,
+        .entry-content {
           width: 90%;
           max-width: 500px;
           background: ${darkMode ? '#1E293B' : '#FFFFFF'};
@@ -831,6 +1177,148 @@ const SmartSpend = () => {
           margin-bottom: 24px;
           text-align: center;
           color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .entry-content {
+          max-width: 620px;
+        }
+
+        .entry-header {
+          font-size: 22px;
+          font-weight: 800;
+          font-family: 'Outfit', sans-serif;
+          margin-bottom: 6px;
+          text-align: center;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .entry-subtitle {
+          font-size: 13px;
+          text-align: center;
+          margin-bottom: 24px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+        }
+
+        .form-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 16px;
+          margin-bottom: 20px;
+        }
+
+        .form-field {
+          display: flex;
+          flex-direction: column;
+          gap: 8px;
+        }
+
+        .form-field.full {
+          grid-column: 1 / -1;
+        }
+
+        .form-label {
+          font-size: 13px;
+          font-weight: 600;
+          color: ${darkMode ? '#CBD5F5' : '#475569'};
+        }
+
+        .form-input,
+        .form-select,
+        .form-textarea {
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : '#F8FAFC'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(148, 163, 184, 0.3)'};
+          border-radius: 12px;
+          padding: 12px 14px;
+          font-size: 14px;
+          color: ${darkMode ? '#F8FAFC' : '#1E293B'};
+          outline: none;
+          transition: border 0.2s ease, box-shadow 0.2s ease;
+          font-family: 'Inter', sans-serif;
+        }
+
+        .form-input:focus,
+        .form-select:focus,
+        .form-textarea:focus {
+          border-color: #6366F1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .form-textarea {
+          min-height: 90px;
+          resize: vertical;
+        }
+
+        .input-with-prefix {
+          position: relative;
+        }
+
+        .input-prefix {
+          position: absolute;
+          left: 12px;
+          top: 50%;
+          transform: translateY(-50%);
+          font-weight: 700;
+          color: ${darkMode ? '#E2E8F0' : '#475569'};
+        }
+
+        .input-with-prefix .form-input {
+          padding-left: 30px;
+        }
+
+        .pill-group {
+          display: flex;
+          gap: 10px;
+        }
+
+        .pill {
+          flex: 1;
+          padding: 10px 12px;
+          border-radius: 999px;
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(148, 163, 184, 0.3)'};
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.6)' : '#F1F5F9'};
+          color: ${darkMode ? '#E2E8F0' : '#475569'};
+          font-weight: 700;
+          cursor: pointer;
+          transition: all 0.2s ease;
+        }
+
+        .pill.active {
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          color: #FFFFFF;
+          border-color: transparent;
+          box-shadow: 0 6px 14px rgba(99, 102, 241, 0.3);
+        }
+
+        .form-error {
+          font-size: 12px;
+          color: #EF4444;
+          font-weight: 600;
+        }
+
+        .form-success {
+          font-size: 12px;
+          color: #10B981;
+          font-weight: 700;
+        }
+
+        .form-alert {
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 13px;
+          margin-bottom: 16px;
+          font-weight: 600;
+        }
+
+        .form-alert.error {
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+          color: #EF4444;
+          border: 1px solid rgba(239, 68, 68, 0.35);
+        }
+
+        .form-alert.success {
+          background: ${darkMode ? 'rgba(16, 185, 129, 0.12)' : 'rgba(16, 185, 129, 0.08)'};
+          color: #10B981;
+          border: 1px solid rgba(16, 185, 129, 0.35);
         }
 
         .upload-zone {
@@ -905,6 +1393,15 @@ const SmartSpend = () => {
           cursor: pointer;
           transition: all 0.2s ease;
           font-family: 'Inter', sans-serif;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          gap: 8px;
+        }
+
+        .btn-compact {
+          padding: 10px 14px;
+          font-size: 13px;
         }
 
         .btn-primary {
@@ -932,7 +1429,204 @@ const SmartSpend = () => {
           background: ${darkMode ? 'rgba(51, 65, 85, 0.7)' : 'rgba(203, 213, 225, 1)'};
         }
 
+        /* ===== AUTH ===== */
+        .auth-page {
+          min-height: 100vh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          padding: 32px 20px;
+          position: relative;
+          overflow: hidden;
+        }
+
+        .auth-page::before {
+          content: '';
+          position: absolute;
+          inset: 0;
+          background:
+            radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.35), transparent 45%),
+            radial-gradient(circle at 90% 80%, rgba(16, 185, 129, 0.25), transparent 40%),
+            linear-gradient(135deg, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.6));
+          opacity: ${darkMode ? 1 : 0.55};
+        }
+
+        .auth-shell {
+          position: relative;
+          z-index: 1;
+          width: 100%;
+          max-width: 980px;
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 28px;
+        }
+
+        .auth-hero {
+          border-radius: 24px;
+          padding: 32px;
+          background: ${darkMode ? 'rgba(30, 41, 59, 0.7)' : 'rgba(255, 255, 255, 0.85)'};
+          border: 1px solid ${darkMode ? 'rgba(99, 102, 241, 0.25)' : 'rgba(99, 102, 241, 0.2)'};
+          backdrop-filter: blur(18px);
+          color: ${darkMode ? '#E2E8F0' : '#1E293B'};
+        }
+
+        .auth-hero h2 {
+          font-size: 26px;
+          font-weight: 800;
+          font-family: 'Outfit', sans-serif;
+          margin-bottom: 12px;
+        }
+
+        .auth-hero p {
+          font-size: 14px;
+          line-height: 1.7;
+          color: ${darkMode ? '#94A3B8' : '#475569'};
+        }
+
+        .auth-highlights {
+          margin-top: 20px;
+          display: grid;
+          gap: 12px;
+        }
+
+        .auth-highlight {
+          padding: 12px 14px;
+          border-radius: 14px;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : 'rgba(248, 250, 252, 0.9)'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.25)'};
+          font-size: 13px;
+          font-weight: 600;
+          color: ${darkMode ? '#CBD5F5' : '#475569'};
+        }
+
+        .auth-card {
+          border-radius: 24px;
+          padding: 32px;
+          background: ${darkMode ? 'rgba(30, 41, 59, 0.9)' : '#FFFFFF'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(226, 232, 240, 1)'};
+          box-shadow: ${darkMode ? '0 18px 60px rgba(0, 0, 0, 0.4)' : '0 18px 60px rgba(15, 23, 42, 0.12)'};
+          backdrop-filter: blur(18px);
+        }
+
+        .auth-brand {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin-bottom: 18px;
+        }
+
+        .auth-title {
+          font-size: 24px;
+          font-weight: 800;
+          font-family: 'Outfit', sans-serif;
+          margin-bottom: 6px;
+          color: ${darkMode ? '#F8FAFC' : '#1E293B'};
+        }
+
+        .auth-subtitle {
+          font-size: 14px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+          margin-bottom: 24px;
+        }
+
+        .auth-form {
+          display: grid;
+          gap: 14px;
+        }
+
+        .auth-input {
+          width: 100%;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : '#F8FAFC'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(148, 163, 184, 0.3)'};
+          border-radius: 12px;
+          padding: 12px 14px;
+          font-size: 14px;
+          color: ${darkMode ? '#F8FAFC' : '#1E293B'};
+          outline: none;
+          transition: border 0.2s ease, box-shadow 0.2s ease;
+          font-family: 'Inter', sans-serif;
+        }
+
+        .auth-input:focus {
+          border-color: #6366F1;
+          box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+        }
+
+        .auth-error {
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.12)' : 'rgba(239, 68, 68, 0.08)'};
+          border: 1px solid rgba(239, 68, 68, 0.35);
+          color: #EF4444;
+          padding: 10px 12px;
+          border-radius: 12px;
+          font-size: 13px;
+          font-weight: 600;
+        }
+
+        .auth-actions {
+          display: grid;
+          gap: 10px;
+          margin-top: 8px;
+        }
+
+        .auth-switch {
+          margin-top: 18px;
+          font-size: 13px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+          text-align: center;
+        }
+
+        .auth-switch button {
+          background: none;
+          border: none;
+          color: #6366F1;
+          font-weight: 700;
+          cursor: pointer;
+          margin-left: 6px;
+        }
+
+        .auth-toggle {
+          position: absolute;
+          top: 24px;
+          right: 24px;
+          z-index: 2;
+        }
+
+        .auth-loading {
+          position: relative;
+          z-index: 1;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 12px;
+          color: ${darkMode ? '#E2E8F0' : '#1E293B'};
+          font-weight: 600;
+        }
+
+        .auth-spinner {
+          width: 36px;
+          height: 36px;
+          border-radius: 50%;
+          border: 3px solid rgba(99, 102, 241, 0.25);
+          border-top-color: #6366F1;
+          animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+          from { transform: rotate(0deg); }
+          to { transform: rotate(360deg); }
+        }
+
         /* ===== RESPONSIVE ===== */
+        @media (max-width: 960px) {
+          .auth-shell {
+            grid-template-columns: 1fr;
+          }
+
+          .auth-hero {
+            order: 2;
+          }
+        }
+
         @media (max-width: 768px) {
           .main-content {
             padding: 20px 16px 120px;
@@ -949,6 +1643,14 @@ const SmartSpend = () => {
           .stats-grid {
             grid-template-columns: 1fr;
           }
+
+          .form-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .action-buttons {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 480px) {
@@ -959,9 +1661,133 @@ const SmartSpend = () => {
           .section-title {
             font-size: 20px;
           }
+
+          .primary-action span {
+            display: none;
+          }
+
+          .primary-action {
+            width: 42px;
+            height: 42px;
+            padding: 0;
+            justify-content: center;
+          }
+
+          .auth-hero {
+            display: none;
+          }
+
+          .auth-card {
+            padding: 24px;
+          }
         }
       `}</style>
 
+      {!isAuthenticated ? (
+        <div className="auth-page">
+          <button
+            className="icon-btn auth-toggle"
+            onClick={() => setDarkMode(!darkMode)}
+            title={darkMode ? "Light mode" : "Dark mode"}
+          >
+            {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+          </button>
+
+          {authStatus === "checking" ? (
+            <div className="auth-loading">
+              <div className="auth-spinner" />
+              Securing your session...
+            </div>
+          ) : (
+            <div className="auth-shell">
+              <div className="auth-hero">
+                <h2>SmartSpend, simplified.</h2>
+                <p>
+                  Track expenses, visualize trends, and keep every manual entry in sync with
+                  your charts. Your dashboard stays clean, fast, and personalized.
+                </p>
+                <div className="auth-highlights">
+                  <div className="auth-highlight">Real-time updates across charts</div>
+                  <div className="auth-highlight">Bank uploads + manual entries together</div>
+                  <div className="auth-highlight">Private, token-based access</div>
+                </div>
+              </div>
+
+              <div className="auth-card">
+                <div className="auth-brand">
+                  <div className="logo">SmartSpend</div>
+                </div>
+                <div className="auth-title">
+                  {authView === "login" ? "Welcome back" : "Create your account"}
+                </div>
+                <div className="auth-subtitle">
+                  {authView === "login"
+                    ? "Sign in to access your dashboard"
+                    : "Start tracking smarter today"}
+                </div>
+
+                {authError && <div className="auth-error">{authError}</div>}
+
+                <form className="auth-form" onSubmit={handleAuthSubmit}>
+                  {authView === "register" && (
+                    <input
+                      className="auth-input"
+                      type="text"
+                      placeholder="Full name"
+                      value={authForm.name}
+                      onChange={(e) => setAuthForm({ ...authForm, name: e.target.value })}
+                      autoComplete="name"
+                      required
+                    />
+                  )}
+                  <input
+                    className="auth-input"
+                    type="email"
+                    placeholder="Email address"
+                    value={authForm.email}
+                    onChange={(e) => setAuthForm({ ...authForm, email: e.target.value })}
+                    autoComplete="email"
+                    required
+                  />
+                  <input
+                    className="auth-input"
+                    type="password"
+                    placeholder="Password"
+                    value={authForm.password}
+                    onChange={(e) => setAuthForm({ ...authForm, password: e.target.value })}
+                    autoComplete={authView === "login" ? "current-password" : "new-password"}
+                    required
+                  />
+
+                  <div className="auth-actions">
+                    <button className="btn btn-primary" type="submit" disabled={authProcessing}>
+                      {authProcessing
+                        ? "Please wait..."
+                        : authView === "login"
+                          ? "Sign In"
+                          : "Create Account"}
+                    </button>
+                  </div>
+                </form>
+
+                <div className="auth-switch">
+                  {authView === "login" ? "New here?" : "Already have an account?"}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAuthView(authView === "login" ? "register" : "login");
+                      setAuthError("");
+                    }}
+                  >
+                    {authView === "login" ? "Create one" : "Back to login"}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      ) : (
+        <>
       {/* Header */}
       <div className="header">
   <div className="header-content">
@@ -971,17 +1797,18 @@ const SmartSpend = () => {
 
       <div className="greeting">
         <span className="greeting-text">Welcome back,</span>
-        <span className="greeting-name"> Vishnu 😃</span>
+        <span className="greeting-name"> {user?.name || "there"} 😃</span>
       </div>
     </div>
 
     <div className="header-actions">
       <button
-        className="icon-btn"
-        onClick={() => setDarkMode(!darkMode)}
-        title={darkMode ? "Light mode" : "Dark mode"}
+        className="primary-action"
+        onClick={openEntryModal}
+        title="Add expense or income"
       >
-        {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+        <Plus size={18} />
+        <span>Add Entry</span>
       </button>
 
       <button
@@ -990,7 +1817,15 @@ const SmartSpend = () => {
         title="Upload statement"
       >
         <Upload size={20} />
-          </button>
+      </button>
+
+      <button
+        className="icon-btn"
+        onClick={() => setDarkMode(!darkMode)}
+        title={darkMode ? "Light mode" : "Dark mode"}
+      >
+        {darkMode ? <Sun size={20} /> : <Moon size={20} />}
+      </button>
         </div>
       </div>
     </div>
@@ -1304,13 +2139,19 @@ const SmartSpend = () => {
 
         {activeTab === 'transactions' && (
           <>
-            <div className="section-title">
-              <Calendar size={26} />
-              Transaction History
+            <div className="section-header">
+              <div className="section-title">
+                <Calendar size={26} />
+                Transaction History
+              </div>
+              <button className="btn btn-primary btn-compact" onClick={openEntryModal}>
+                <Plus size={16} />
+                Add Entry
+              </button>
             </div>
             
             <div className="category-filters">
-              {['All', 'Food & Dining', 'Transportation', 'Shopping', 'Subscriptions', 'Utilities', 'Savings', 'Health'].map(cat => (
+              {categoryFilters.map(cat => (
                 <div
                   key={cat}
                   className={`filter-chip ${selectedCategory === cat ? 'active' : ''}`}
@@ -1324,9 +2165,9 @@ const SmartSpend = () => {
             <div className="chart-card">
               <div className="transaction-list">
                 {sortedTransactions
-                  .filter(t => selectedCategory === 'All' || getCategoryFromDescription(t.description) === selectedCategory)
+                  .filter(t => selectedCategory === 'All' || resolveCategory(t) === selectedCategory)
                   .map(tx => {
-                    const category = getCategoryFromDescription(tx.description);
+                    const category = resolveCategory(tx);
                     const icons = {
                       'Food & Dining': '🍔', 'Transportation': '🚗', 'Shopping': '🛍️',
                       'Subscriptions': '📺', 'Utilities': '💡', 'Savings': '💰',
@@ -1340,11 +2181,14 @@ const SmartSpend = () => {
                               ? 'linear-gradient(135deg, #10B981 0%, #14B8A6 100%)'
                               : 'linear-gradient(135deg, #EF4444 0%, #DC2626 100%)'
                           }}>
-                            {icons[category]}
+                            {icons[category] || icons.Others}
                           </div>
                           <div className="transaction-details">
-                            <h4>{tx.description}</h4>
-                            <p>{tx.date}</p>
+                            <h4>{tx.description || 'Manual entry'}</h4>
+                            <p>
+                              {tx.date}
+                              {tx.paymentMethod ? ` • ${tx.paymentMethod}` : ''}
+                            </p>
                           </div>
                         </div>
                         <div className="transaction-amount">
@@ -1408,14 +2252,17 @@ const SmartSpend = () => {
             <div className="section-title">Profile & Settings</div>
             <div className="chart-card" style={{ textAlign: 'center', padding: '48px' }}>
               <div style={{ fontSize: '80px', marginBottom: '24px' }}>👤</div>
-              <h2 style={{ fontSize: '28px', fontWeight: '800', fontFamily: 'Outfit', marginBottom: '8px' }}>Vishnu Ramesh</h2>
-              <p style={{ color: darkMode ? '#94A3B8' : '#64748B', marginBottom: '40px', fontSize: '15px' }}>vishnuramesh0777@gmail.com</p>
+              <h2 style={{ fontSize: '28px', fontWeight: '800', fontFamily: 'Outfit', marginBottom: '8px' }}>{user?.name || "User"}</h2>
+              <p style={{ color: darkMode ? '#94A3B8' : '#64748B', marginBottom: '40px', fontSize: '15px' }}>{user?.email || "user@smartspend.ai"}</p>
               
               <div style={{ display: 'grid', gap: '14px', maxWidth: '400px', margin: '0 auto' }}>
                 <button className="btn btn-primary">Account Settings</button>
                 <button className="btn btn-secondary">Privacy & Security</button>
                 <button className="btn btn-secondary">Export Data</button>
-                <button className="btn btn-secondary" style={{ color: '#EF4444', fontWeight: 700 }}>Logout</button>
+                <button className="btn btn-secondary" style={{ color: '#EF4444', fontWeight: 700 }} onClick={handleLogout}>
+                  <LogOut size={16} />
+                  Logout
+                </button>
               </div>
             </div>
           </>
@@ -1480,6 +2327,135 @@ const SmartSpend = () => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Manual Entry Modal */}
+      {showEntryModal && (
+        <div className="entry-modal" onClick={closeEntryModal}>
+          <div className="entry-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="entry-header">Add Expense / Spending</h2>
+            <div className="entry-subtitle">Log a manual entry and update your insights instantly.</div>
+
+            {entryErrors.form && <div className="form-alert error">{entryErrors.form}</div>}
+            {entrySuccess && <div className="form-alert success">{entrySuccess}</div>}
+
+            <form onSubmit={handleManualSubmit}>
+              <div className="form-grid">
+                <div className="form-field full">
+                  <label className="form-label">Entry type</label>
+                  <div className="pill-group">
+                    <button
+                      type="button"
+                      className={`pill ${entryForm.type === "expense" ? "active" : ""}`}
+                      onClick={() =>
+                        setEntryForm({
+                          ...entryForm,
+                          type: "expense",
+                          category:
+                            entryForm.category === "Income" ? "Food & Dining" : entryForm.category
+                        })
+                      }
+                    >
+                      Expense
+                    </button>
+                    <button
+                      type="button"
+                      className={`pill ${entryForm.type === "income" ? "active" : ""}`}
+                      onClick={() => setEntryForm({ ...entryForm, type: "income", category: "Income" })}
+                    >
+                      Income
+                    </button>
+                  </div>
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Amount</label>
+                  <div className="input-with-prefix">
+                    <span className="input-prefix">₹</span>
+                    <input
+                      className="form-input"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={entryForm.amount}
+                      onChange={(e) => setEntryForm({ ...entryForm, amount: e.target.value })}
+                      placeholder="0.00"
+                      required
+                    />
+                  </div>
+                  {entryErrors.amount && <div className="form-error">{entryErrors.amount}</div>}
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Date</label>
+                  <input
+                    className="form-input"
+                    type="date"
+                    value={entryForm.date}
+                    onChange={(e) => setEntryForm({ ...entryForm, date: e.target.value })}
+                    required
+                  />
+                  {entryErrors.date && <div className="form-error">{entryErrors.date}</div>}
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Category</label>
+                  <select
+                    className="form-select"
+                    value={entryForm.category}
+                    onChange={(e) => setEntryForm({ ...entryForm, category: e.target.value })}
+                    required
+                  >
+                    {categoryOptions.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
+                  </select>
+                  {entryErrors.category && <div className="form-error">{entryErrors.category}</div>}
+                </div>
+
+                <div className="form-field">
+                  <label className="form-label">Payment method</label>
+                  <select
+                    className="form-select"
+                    value={entryForm.paymentMethod}
+                    onChange={(e) => setEntryForm({ ...entryForm, paymentMethod: e.target.value })}
+                    required
+                  >
+                    {paymentOptions.map((method) => (
+                      <option key={method} value={method}>
+                        {method}
+                      </option>
+                    ))}
+                  </select>
+                  {entryErrors.paymentMethod && <div className="form-error">{entryErrors.paymentMethod}</div>}
+                </div>
+
+                <div className="form-field full">
+                  <label className="form-label">Notes (optional)</label>
+                  <textarea
+                    className="form-textarea"
+                    value={entryForm.notes}
+                    onChange={(e) => setEntryForm({ ...entryForm, notes: e.target.value })}
+                    placeholder="Add a quick description or reference"
+                  />
+                </div>
+              </div>
+
+              <div className="action-buttons">
+                <button className="btn btn-secondary" type="button" onClick={closeEntryModal}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" type="submit" disabled={entrySubmitting}>
+                  {entrySubmitting ? "Saving..." : "Save Entry"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+        </>
       )}
     </div>
   );
