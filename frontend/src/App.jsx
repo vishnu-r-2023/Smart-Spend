@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut, User, Settings, Shield, Bell, Key, Sparkles, Tags, Camera, Trash2 } from 'lucide-react';
 
@@ -70,6 +70,26 @@ const SmartSpend = () => {
   const [deleteError, setDeleteError] = useState("");
   const [deleteNotice, setDeleteNotice] = useState(null);
 
+  const [linkedAccounts, setLinkedAccounts] = useState([]);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [selectedBank, setSelectedBank] = useState(null);
+  const [accountType, setAccountType] = useState("Savings");
+  const [linkingAccount, setLinkingAccount] = useState(false);
+  const [unlinkingId, setUnlinkingId] = useState(null);
+  const [linkNotice, setLinkNotice] = useState(null);
+
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false);
+  const [bulkDeleteInput, setBulkDeleteInput] = useState("");
+  const [bulkDeleteProcessing, setBulkDeleteProcessing] = useState(false);
+  const [bulkDeleteError, setBulkDeleteError] = useState("");
+  const [bulkDeleteNotice, setBulkDeleteNotice] = useState(null);
+
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pullDistance, setPullDistance] = useState(0);
+  const [pullReady, setPullReady] = useState(false);
+  const pullStartRef = useRef(null);
+  const pullingRef = useRef(false);
+
   const isAuthenticated = authStatus === "authenticated";
 
   const categoryOptions = [
@@ -99,6 +119,7 @@ const SmartSpend = () => {
     { id: "edit", label: "Edit Profile", icon: Camera },
     { id: "account", label: "Account Settings", icon: Settings },
     { id: "security", label: "Security", icon: Shield },
+    { id: "aggregation", label: "Linked Accounts", icon: CreditCard },
     { id: "preferences", label: "Data & Preferences", icon: Tags }
   ];
 
@@ -124,6 +145,18 @@ const SmartSpend = () => {
       description: "Token-based sessions protect every update."
     }
   ];
+
+  const bankOptions = [
+    { id: "hdfc", name: "HDFC Bank", tone: "indigo" },
+    { id: "icici", name: "ICICI Bank", tone: "rose" },
+    { id: "sbi", name: "State Bank of India", tone: "blue" },
+    { id: "axis", name: "Axis Bank", tone: "purple" },
+    { id: "kotak", name: "Kotak Mahindra", tone: "amber" },
+    { id: "yes", name: "Yes Bank", tone: "emerald" },
+    { id: "citi", name: "Citi", tone: "slate" }
+  ];
+
+  const accountTypes = ["Savings", "Current", "Credit Card"];
   
   const sortedTransactions = [...transactions].sort((a, b) => {
     if (!a.date && !b.date) return 0;
@@ -250,6 +283,31 @@ const SmartSpend = () => {
         : []
     });
   }, [profileData]);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setLinkedAccounts([]);
+      return;
+    }
+    const key = `smartspend_linked_accounts_${user.id}`;
+    const stored = localStorage.getItem(key);
+    if (stored) {
+      try {
+        const parsed = JSON.parse(stored);
+        setLinkedAccounts(Array.isArray(parsed) ? parsed : []);
+      } catch (err) {
+        setLinkedAccounts([]);
+      }
+    } else {
+      setLinkedAccounts([]);
+    }
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+    const key = `smartspend_linked_accounts_${user.id}`;
+    localStorage.setItem(key, JSON.stringify(linkedAccounts));
+  }, [linkedAccounts, user?.id]);
 
   // Calculate statistics
   const totalIncome = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
@@ -642,6 +700,7 @@ const SmartSpend = () => {
       setUser(null);
       setAuthStatus("guest");
       setTransactions([]);
+      setLinkedAccounts([]);
       setActiveTab("dashboard");
       setShowUploadModal(false);
       setShowEntryModal(false);
@@ -688,6 +747,179 @@ const SmartSpend = () => {
       setDeleteError(err.message || "Failed to delete transaction");
     } finally {
       setDeleteProcessing(false);
+    }
+  };
+
+  const openBulkDeleteModal = () => {
+    setBulkDeleteInput("");
+    setBulkDeleteError("");
+    setShowBulkDeleteModal(true);
+  };
+
+  const closeBulkDeleteModal = () => {
+    if (bulkDeleteProcessing) return;
+    setShowBulkDeleteModal(false);
+    setBulkDeleteError("");
+  };
+
+  const handleBulkDelete = async () => {
+    if (!authToken) return;
+    if (bulkDeleteInput.trim() !== "DELETE") {
+      setBulkDeleteError('Type "DELETE" to confirm.');
+      return;
+    }
+
+    try {
+      setBulkDeleteProcessing(true);
+      setBulkDeleteError("");
+      const res = await fetch(`${API_BASE}/transactions/all`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` }
+      });
+      if (!res.ok) {
+        const errBody = await res.json().catch(() => ({}));
+        throw new Error(errBody.message || "Failed to delete transactions");
+      }
+      setTransactions([]);
+      setShowBulkDeleteModal(false);
+      setBulkDeleteNotice({ type: "success", text: "All transactions deleted" });
+      setTimeout(() => setBulkDeleteNotice(null), 3000);
+    } catch (err) {
+      setBulkDeleteError(err.message || "Failed to delete transactions");
+    } finally {
+      setBulkDeleteProcessing(false);
+    }
+  };
+
+  const refreshData = async () => {
+    if (!authToken) return;
+    try {
+      setIsRefreshing(true);
+      const scrollPos = window.scrollY;
+      await Promise.all([fetchTransactions(authToken), fetchProfile(authToken)]);
+      requestAnimationFrame(() => {
+        window.scrollTo({ top: scrollPos, behavior: "auto" });
+      });
+    } catch (err) {
+      console.warn("Refresh failed", err);
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handlePullStart = (clientY) => {
+    if (isRefreshing) return;
+    if (window.scrollY > 0) return;
+    pullingRef.current = true;
+    pullStartRef.current = clientY;
+  };
+
+  const handlePullMove = (clientY) => {
+    if (!pullingRef.current || pullStartRef.current === null) return;
+    const diff = clientY - pullStartRef.current;
+    if (diff <= 0) {
+      setPullDistance(0);
+      setPullReady(false);
+      return;
+    }
+    const capped = Math.min(diff, 80);
+    setPullDistance(capped);
+    setPullReady(capped > 60);
+  };
+
+  const handlePullEnd = () => {
+    if (!pullingRef.current) return;
+    pullingRef.current = false;
+    if (pullReady) {
+      setPullDistance(60);
+      refreshData().finally(() => {
+        setPullDistance(0);
+        setPullReady(false);
+      });
+    } else {
+      setPullDistance(0);
+      setPullReady(false);
+    }
+  };
+
+  const getBankInitials = (name = "") => {
+    return name
+      .split(" ")
+      .filter(Boolean)
+      .map((word) => word[0])
+      .slice(0, 2)
+      .join("")
+      .toUpperCase();
+  };
+
+  const bankToneMap = {
+    indigo: "linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%)",
+    rose: "linear-gradient(135deg, #F43F5E 0%, #FB7185 100%)",
+    blue: "linear-gradient(135deg, #3B82F6 0%, #60A5FA 100%)",
+    purple: "linear-gradient(135deg, #8B5CF6 0%, #A78BFA 100%)",
+    amber: "linear-gradient(135deg, #F59E0B 0%, #FBBF24 100%)",
+    emerald: "linear-gradient(135deg, #10B981 0%, #34D399 100%)",
+    slate: "linear-gradient(135deg, #64748B 0%, #94A3B8 100%)"
+  };
+
+  const getBankBadgeStyle = (tone) => ({
+    background: bankToneMap[tone] || bankToneMap.indigo
+  });
+
+  const openAccountModal = () => {
+    setSelectedBank(null);
+    setAccountType("Savings");
+    setShowAccountModal(true);
+    setLinkNotice(null);
+  };
+
+  const closeAccountModal = () => {
+    if (linkingAccount) return;
+    setShowAccountModal(false);
+  };
+
+  const handleLinkAccount = async () => {
+    if (!selectedBank) {
+      setLinkNotice({ type: "error", text: "Select a bank to continue" });
+      return;
+    }
+    try {
+      setLinkingAccount(true);
+      setLinkNotice(null);
+      await new Promise((resolve) => setTimeout(resolve, 600));
+      const last4 = Math.floor(1000 + Math.random() * 9000);
+      const newAccount = {
+        id: `demo_${Date.now()}_${Math.floor(Math.random() * 1000)}`,
+        bankName: selectedBank.name,
+        tone: selectedBank.tone,
+        accountType,
+        maskedNumber: `****${last4}`,
+        demo: true
+      };
+      setLinkedAccounts((prev) => [newAccount, ...prev]);
+      setShowAccountModal(false);
+      setLinkNotice({ type: "success", text: "Demo account linked successfully" });
+      setTimeout(() => setLinkNotice(null), 3000);
+    } catch (err) {
+      setLinkNotice({ type: "error", text: "Failed to link account" });
+    } finally {
+      setLinkingAccount(false);
+    }
+  };
+
+  const handleUnlinkAccount = async (accountId) => {
+    if (!accountId) return;
+    try {
+      setUnlinkingId(accountId);
+      setLinkNotice(null);
+      await new Promise((resolve) => setTimeout(resolve, 500));
+      setLinkedAccounts((prev) => prev.filter((account) => account.id !== accountId));
+      setLinkNotice({ type: "success", text: "Account unlinked" });
+      setTimeout(() => setLinkNotice(null), 3000);
+    } catch (err) {
+      setLinkNotice({ type: "error", text: "Failed to unlink account" });
+    } finally {
+      setUnlinkingId(null);
     }
   };
 
@@ -1174,6 +1406,7 @@ const SmartSpend = () => {
           margin: 0 auto;
           padding: 32px;
           padding-bottom: 120px;
+          position: relative;
         }
 
         /* ===== STATS CARDS ===== */
@@ -1781,6 +2014,148 @@ const SmartSpend = () => {
           border: 1px solid rgba(239, 68, 68, 0.35);
         }
 
+        /* ===== ACCOUNT AGGREGATION ===== */
+        .accounts-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          flex-wrap: wrap;
+          margin-bottom: 16px;
+        }
+
+        .accounts-grid {
+          display: grid;
+          gap: 12px;
+        }
+
+        .account-card {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 12px;
+          padding: 14px;
+          border-radius: 14px;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.25)'};
+        }
+
+        .account-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+        }
+
+        .bank-badge {
+          width: 46px;
+          height: 46px;
+          border-radius: 14px;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: 800;
+          font-size: 15px;
+          text-transform: uppercase;
+          background: linear-gradient(135deg, #6366F1 0%, #8B5CF6 100%);
+          box-shadow: 0 8px 18px rgba(99, 102, 241, 0.3);
+          flex-shrink: 0;
+        }
+
+        .account-meta h4 {
+          font-size: 14px;
+          font-weight: 700;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+          margin-bottom: 4px;
+        }
+
+        .account-meta p {
+          font-size: 12px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+        }
+
+        .demo-pill {
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          padding: 4px 8px;
+          border-radius: 999px;
+          font-size: 10px;
+          font-weight: 700;
+          letter-spacing: 0.4px;
+          text-transform: uppercase;
+          background: ${darkMode ? 'rgba(99, 102, 241, 0.18)' : 'rgba(99, 102, 241, 0.12)'};
+          color: ${darkMode ? '#E2E8F0' : '#4338CA'};
+          border: 1px solid ${darkMode ? 'rgba(99, 102, 241, 0.35)' : 'rgba(99, 102, 241, 0.25)'};
+        }
+
+        .account-actions {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+        }
+
+        .unlink-btn {
+          border: none;
+          background: transparent;
+          color: ${darkMode ? '#FCA5A5' : '#DC2626'};
+          font-weight: 700;
+          font-size: 12px;
+          cursor: pointer;
+        }
+
+        .unlink-btn:disabled {
+          opacity: 0.6;
+          cursor: not-allowed;
+        }
+
+        .bank-grid {
+          display: grid;
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          gap: 12px;
+          margin-bottom: 16px;
+        }
+
+        .bank-option {
+          padding: 14px;
+          border-radius: 14px;
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.2)' : 'rgba(148, 163, 184, 0.25)'};
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.6)' : '#F8FAFC'};
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          transition: all 0.2s ease;
+        }
+
+        .bank-option .bank-badge {
+          width: 36px;
+          height: 36px;
+          border-radius: 10px;
+          font-size: 12px;
+        }
+
+        .bank-option.active {
+          border-color: rgba(99, 102, 241, 0.6);
+          box-shadow: 0 8px 18px rgba(99, 102, 241, 0.2);
+        }
+
+        .bank-option:hover {
+          transform: translateY(-1px);
+        }
+
+        .bank-option .bank-name {
+          font-size: 13px;
+          font-weight: 700;
+          color: ${darkMode ? '#F1F5F9' : '#1E293B'};
+        }
+
+        .demo-note {
+          font-size: 12px;
+          color: ${darkMode ? '#94A3B8' : '#64748B'};
+          margin-bottom: 16px;
+        }
+
         .transaction-amount .category {
           font-size: 11px;
           color: ${darkMode ? '#94A3B8' : '#64748B'};
@@ -1902,6 +2277,10 @@ const SmartSpend = () => {
           animation: slideUp 0.3s ease;
         }
 
+        .account-content {
+          max-width: 560px;
+        }
+
         .confirm-title {
           font-size: 20px;
           font-weight: 800;
@@ -1926,6 +2305,60 @@ const SmartSpend = () => {
           color: ${darkMode ? '#E2E8F0' : '#475569'};
           display: grid;
           gap: 6px;
+        }
+
+        .confirm-input {
+          width: 100%;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.7)' : '#F8FAFC'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(148, 163, 184, 0.3)'};
+          border-radius: 12px;
+          padding: 10px 12px;
+          font-size: 14px;
+          color: ${darkMode ? '#F8FAFC' : '#1E293B'};
+          outline: none;
+          transition: border 0.2s ease, box-shadow 0.2s ease;
+          font-family: 'Inter', sans-serif;
+          margin-bottom: 12px;
+        }
+
+        .confirm-input:focus {
+          border-color: #EF4444;
+          box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+        }
+
+        .refresh-indicator {
+          position: absolute;
+          top: 0;
+          left: 50%;
+          transform: translate(-50%, 0);
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 6px 12px;
+          border-radius: 999px;
+          font-size: 12px;
+          font-weight: 600;
+          background: ${darkMode ? 'rgba(15, 23, 42, 0.8)' : '#FFFFFF'};
+          color: ${darkMode ? '#E2E8F0' : '#475569'};
+          border: 1px solid ${darkMode ? 'rgba(148, 163, 184, 0.25)' : 'rgba(148, 163, 184, 0.3)'};
+          box-shadow: 0 8px 20px rgba(0, 0, 0, 0.12);
+          opacity: 0;
+          pointer-events: none;
+          transition: opacity 0.2s ease;
+          z-index: 5;
+        }
+
+        .refresh-indicator.visible {
+          opacity: 1;
+        }
+
+        .refresh-spinner {
+          width: 14px;
+          height: 14px;
+          border-radius: 50%;
+          border: 2px solid rgba(99, 102, 241, 0.3);
+          border-top-color: #6366F1;
+          animation: spin 1s linear infinite;
         }
 
         @keyframes slideUp {
@@ -2196,6 +2629,17 @@ const SmartSpend = () => {
 
         .btn-secondary:hover {
           background: ${darkMode ? 'rgba(51, 65, 85, 0.7)' : 'rgba(203, 213, 225, 1)'};
+        }
+
+        .btn-danger {
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.12)'};
+          color: #EF4444;
+          border: 1px solid ${darkMode ? 'rgba(239, 68, 68, 0.35)' : 'rgba(239, 68, 68, 0.25)'};
+          box-shadow: none;
+        }
+
+        .btn-danger:hover:not(:disabled) {
+          background: ${darkMode ? 'rgba(239, 68, 68, 0.25)' : 'rgba(239, 68, 68, 0.18)'};
         }
 
         /* ===== AUTH ===== */
@@ -2505,6 +2949,10 @@ const SmartSpend = () => {
           .profile-grid {
             grid-template-columns: 1fr;
           }
+
+          .bank-grid {
+            grid-template-columns: 1fr;
+          }
         }
 
         @media (max-width: 480px) {
@@ -2744,7 +3192,29 @@ const SmartSpend = () => {
 
 
       {/* Main Content */}
-      <div className="main-content">
+      <div
+        className="main-content"
+        onTouchStart={(e) => handlePullStart(e.touches[0].clientY)}
+        onTouchMove={(e) => handlePullMove(e.touches[0].clientY)}
+        onTouchEnd={handlePullEnd}
+        onTouchCancel={handlePullEnd}
+      >
+        <div
+          className={`refresh-indicator ${pullDistance > 0 || isRefreshing ? "visible" : ""}`}
+          style={{ transform: `translate(-50%, ${Math.min(pullDistance, 70)}px)` }}
+        >
+          {isRefreshing ? (
+            <>
+              <span className="refresh-spinner" />
+              Refreshing...
+            </>
+          ) : (
+            <>
+              <span className="refresh-spinner" />
+              {pullReady ? "Release to refresh" : "Pull to refresh"}
+            </>
+          )}
+        </div>
         {activeTab === 'dashboard' && (
           <>
             {/* Stats Cards */}
@@ -3056,10 +3526,20 @@ const SmartSpend = () => {
                 <Calendar size={26} />
                 Transaction History
               </div>
-              <button className="btn btn-primary btn-compact" onClick={openEntryModal}>
-                <Plus size={16} />
-                Add Entry
-              </button>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button
+                  className="btn btn-secondary btn-compact btn-danger"
+                  onClick={openBulkDeleteModal}
+                  disabled={transactions.length === 0}
+                  title="Delete all transactions"
+                >
+                  Delete All
+                </button>
+                <button className="btn btn-primary btn-compact" onClick={openEntryModal}>
+                  <Plus size={16} />
+                  Add Entry
+                </button>
+              </div>
             </div>
             
             <div className="category-filters">
@@ -3074,9 +3554,9 @@ const SmartSpend = () => {
               ))}
             </div>
 
-            {deleteNotice && (
-              <div className={`status-banner ${deleteNotice.type}`}>
-                {deleteNotice.text}
+            {(deleteNotice || bulkDeleteNotice) && (
+              <div className={`status-banner ${(bulkDeleteNotice || deleteNotice)?.type || "success"}`}>
+                {(bulkDeleteNotice || deleteNotice)?.text}
               </div>
             )}
 
@@ -3474,6 +3954,65 @@ const SmartSpend = () => {
                   </div>
                 )}
 
+                {profileSection === "aggregation" && (
+                  <div className="profile-panel">
+                    <div className="profile-card">
+                      <div className="accounts-header">
+                        <div className="profile-section-title">
+                          <CreditCard size={16} />
+                          Linked Accounts
+                        </div>
+                        <button className="btn btn-primary btn-compact" onClick={openAccountModal}>
+                          <Plus size={14} />
+                          Link Account
+                        </button>
+                      </div>
+                      <div className="demo-note">
+                        Demo only — no real bank credentials required.
+                      </div>
+
+                      {linkNotice && (
+                        <div className={`status-banner ${linkNotice.type}`}>{linkNotice.text}</div>
+                      )}
+
+                      {linkedAccounts.length === 0 ? (
+                        <div className="form-alert">
+                          No linked accounts yet. Add a demo account to showcase aggregation.
+                        </div>
+                      ) : (
+                        <div className="accounts-grid">
+                          {linkedAccounts.map((account) => (
+                            <div key={account.id} className="account-card">
+                              <div className="account-left">
+                                <div className="bank-badge" style={getBankBadgeStyle(account.tone)}>
+                                  {getBankInitials(account.bankName)}
+                                </div>
+                                <div className="account-meta">
+                                  <h4>{account.bankName}</h4>
+                                  <p>
+                                    {account.accountType} • {account.maskedNumber}
+                                  </p>
+                                </div>
+                              </div>
+                              <div className="account-actions">
+                                {account.demo && <span className="demo-pill">Demo Account</span>}
+                                <button
+                                  className="unlink-btn"
+                                  onClick={() => handleUnlinkAccount(account.id)}
+                                  disabled={unlinkingId === account.id}
+                                  title="Unlink demo account"
+                                >
+                                  {unlinkingId === account.id ? "Removing..." : "Unlink"}
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
                 {profileSection === "preferences" && (
                   <div className="profile-panel">
                     <div className="profile-card">
@@ -3725,6 +4264,65 @@ const SmartSpend = () => {
         </div>
       )}
 
+      {/* Account Aggregation Demo Modal */}
+      {showAccountModal && (
+        <div className="entry-modal" onClick={closeAccountModal}>
+          <div className="entry-content account-content" onClick={(e) => e.stopPropagation()}>
+            <h2 className="entry-header">Link Bank Account</h2>
+            <div className="entry-subtitle">
+              Demo account aggregation — no real credentials required.
+            </div>
+
+            {linkNotice?.type === "error" && (
+              <div className="form-alert error">{linkNotice.text}</div>
+            )}
+
+            <div className="bank-grid">
+              {bankOptions.map((bank) => (
+                <div
+                  key={bank.id}
+                  className={`bank-option ${selectedBank?.id === bank.id ? "active" : ""}`}
+                  onClick={() => setSelectedBank(bank)}
+                >
+                  <div className="bank-badge" style={getBankBadgeStyle(bank.tone)}>
+                    {getBankInitials(bank.name)}
+                  </div>
+                  <div className="bank-name">{bank.name}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="form-field">
+              <label className="form-label">Account type</label>
+              <select
+                className="form-select"
+                value={accountType}
+                onChange={(e) => setAccountType(e.target.value)}
+              >
+                {accountTypes.map((type) => (
+                  <option key={type} value={type}>
+                    {type}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="action-buttons" style={{ marginTop: "20px" }}>
+              <button className="btn btn-secondary" onClick={closeAccountModal} disabled={linkingAccount}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={handleLinkAccount}
+                disabled={linkingAccount || !selectedBank}
+              >
+                {linkingAccount ? "Linking..." : "Link Account"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Delete Confirmation Modal */}
       {showDeleteModal && (
         <div className="confirm-modal" onClick={closeDeleteModal}>
@@ -3747,6 +4345,46 @@ const SmartSpend = () => {
               </button>
               <button className="btn btn-primary" onClick={handleDeleteTransaction} disabled={deleteProcessing}>
                 {deleteProcessing ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Delete Confirmation Modal */}
+      {showBulkDeleteModal && (
+        <div className="confirm-modal" onClick={closeBulkDeleteModal}>
+          <div className="confirm-content" onClick={(e) => e.stopPropagation()}>
+            <div className="confirm-title">Delete all transactions?</div>
+            <div className="confirm-text">
+              This will permanently remove all transactions for your account. This cannot be undone.
+            </div>
+
+            <div className="confirm-details">
+              <div><strong>Type DELETE to confirm</strong></div>
+              <div>All summaries and charts will reset.</div>
+            </div>
+
+            <input
+              className="confirm-input"
+              placeholder="Type DELETE"
+              value={bulkDeleteInput}
+              onChange={(e) => setBulkDeleteInput(e.target.value)}
+              disabled={bulkDeleteProcessing}
+            />
+
+            {bulkDeleteError && <div className="form-alert error">{bulkDeleteError}</div>}
+
+            <div className="action-buttons">
+              <button className="btn btn-secondary" onClick={closeBulkDeleteModal} disabled={bulkDeleteProcessing}>
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary btn-danger"
+                onClick={handleBulkDelete}
+                disabled={bulkDeleteProcessing || bulkDeleteInput.trim() !== "DELETE"}
+              >
+                {bulkDeleteProcessing ? "Deleting..." : "Delete All"}
               </button>
             </div>
           </div>

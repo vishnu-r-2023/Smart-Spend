@@ -57,6 +57,19 @@ router.post("/transactions", authMiddleware, async (req, res) => {
 });
 
 /**
+ * DELETE all transactions for current user
+ */
+router.delete("/transactions/all", authMiddleware, async (req, res) => {
+  try {
+    const result = await Transaction.deleteMany({ userId: req.user._id });
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Failed to delete transactions" });
+  }
+});
+
+/**
  * DELETE a single transaction (user scoped)
  */
 router.delete("/transactions/:id", authMiddleware, async (req, res) => {
