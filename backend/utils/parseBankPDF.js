@@ -7,32 +7,122 @@ export const parseBankPDF = async (filePath) => {
 
   const tokens = [];
 
-  const getCategoryFromDescription = (desc = "") => {
-    const d = desc.toLowerCase();
-    if (d.includes("zomato") || d.includes("swiggy") || d.includes("restaurant") || d.includes("pizza") || d.includes("coffee"))
+  const categorizeTransaction = (description = "") => {
+    const d = description.toLowerCase().trim();
+
+    if (
+      d.includes("zomato") ||
+      d.includes("swiggy") ||
+      d.includes("restaurant") ||
+      d.includes("pizza") ||
+      d.includes("coffee") ||
+      d.includes("food") ||
+      d.includes("dining")
+    )
       return "Food & Dining";
-    if (d.includes("uber") || d.includes("ola") || d.includes("metro") || d.includes("petrol"))
+
+    if (
+      d.includes("uber") ||
+      d.includes("ola") ||
+      d.includes("metro") ||
+      d.includes("bus") ||
+      d.includes("train") ||
+      d.includes("petrol") ||
+      d.includes("fuel") ||
+      d.includes("diesel")
+    )
       return "Transportation";
-    if (d.includes("rent") || d.includes("landlord") || d.includes("mortgage"))
+
+    if (
+      d.includes("rent") ||
+      d.includes("landlord") ||
+      d.includes("house rent") ||
+      d.includes("mortgage")
+    )
       return "Rent";
-    if (d.includes("flight") || d.includes("hotel") || d.includes("airbnb") || d.includes("travel"))
+
+    if (
+      d.includes("flight") ||
+      d.includes("hotel") ||
+      d.includes("airbnb") ||
+      d.includes("travel") ||
+      d.includes("trip")
+    )
       return "Travel";
-    if (d.includes("amazon") || d.includes("flipkart") || d.includes("shopping"))
+
+    if (
+      d.includes("amazon") ||
+      d.includes("flipkart") ||
+      d.includes("shopping") ||
+      d.includes("myntra") ||
+      d.includes("store")
+    )
       return "Shopping";
-    if (d.includes("netflix") || d.includes("spotify") || d.includes("prime"))
+
+    if (
+      d.includes("netflix") ||
+      d.includes("spotify") ||
+      d.includes("prime") ||
+      d.includes("subscription")
+    )
       return "Subscriptions";
-    if (d.includes("movie") || d.includes("cinema") || d.includes("concert") || d.includes("game"))
+
+    if (
+      d.includes("movie") ||
+      d.includes("cinema") ||
+      d.includes("concert") ||
+      d.includes("game") ||
+      d.includes("bookmyshow")
+    )
       return "Entertainment";
-    if (d.includes("course") || d.includes("tuition") || d.includes("education") || d.includes("training"))
+
+    if (
+      d.includes("course") ||
+      d.includes("tuition") ||
+      d.includes("education") ||
+      d.includes("training") ||
+      d.includes("udemy") ||
+      d.includes("coursera")
+    )
       return "Education";
-    if (d.includes("electricity") || d.includes("mobile") || d.includes("bill"))
+
+    if (
+      d.includes("electricity") ||
+      d.includes("mobile") ||
+      d.includes("bill") ||
+      d.includes("recharge") ||
+      d.includes("water") ||
+      d.includes("gas")
+    )
       return "Utilities";
-    if (d.includes("gym") || d.includes("health"))
+
+    if (
+      d.includes("gym") ||
+      d.includes("health") ||
+      d.includes("hospital") ||
+      d.includes("medical") ||
+      d.includes("pharmacy")
+    )
       return "Health";
-    if (d.includes("sip") || d.includes("mutual fund") || d.includes("investment"))
+
+    if (
+      d.includes("sip") ||
+      d.includes("mutual fund") ||
+      d.includes("investment") ||
+      d.includes("stocks") ||
+      d.includes("equity")
+    )
       return "Savings";
-    if (d.includes("salary") || d.includes("bonus"))
+
+    if (
+      d.includes("salary") ||
+      d.includes("bonus") ||
+      d.includes("payroll") ||
+      d.includes("income") ||
+      d.includes("credited")
+    )
       return "Income";
+
     return "Others";
   };
 
@@ -89,7 +179,7 @@ export const parseBankPDF = async (filePath) => {
     const amount = creditAmt > 0 ? creditAmt : -debitAmt;
 
     const trimmedDescription = description.trim();
-    const category = getCategoryFromDescription(trimmedDescription);
+    const category = categorizeTransaction(trimmedDescription);
 
     transactions.push({
       date,
