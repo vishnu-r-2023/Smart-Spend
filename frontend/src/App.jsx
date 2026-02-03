@@ -316,31 +316,193 @@ const SmartSpend = () => {
   const savingsRate = totalIncome > 0 ? ((totalSavings / totalIncome) * 100).toFixed(1) : 0;
 
   const getCategoryFromDescription = (desc = "") => {
-    const d = desc.toLowerCase();
-    if (d.includes("zomato") || d.includes("swiggy") || d.includes("restaurant") || d.includes("pizza") || d.includes("coffee"))
+    const d = desc
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+    if (!d) return "Others";
+
+    const matches = (keywords) => keywords.some((keyword) => d.includes(keyword));
+
+    if (
+      matches([
+        "zomato",
+        "swiggy",
+        "ubereats",
+        "restaurant",
+        "cafe",
+        "coffee",
+        "pizza",
+        "burger",
+        "food",
+        "dining",
+        "meal",
+        "lunch",
+        "dinner",
+        "breakfast",
+        "snack"
+      ])
+    )
       return "Food & Dining";
-    if (d.includes("uber") || d.includes("ola") || d.includes("metro") || d.includes("petrol"))
+
+    if (
+      matches([
+        "uber",
+        "ola",
+        "metro",
+        "bus",
+        "train",
+        "taxi",
+        "cab",
+        "auto",
+        "rickshaw",
+        "petrol",
+        "fuel",
+        "diesel",
+        "gas",
+        "parking",
+        "toll",
+        "irctc"
+      ])
+    )
       return "Transportation";
-    if (d.includes("rent") || d.includes("landlord") || d.includes("mortgage"))
+
+    if (matches(["rent", "landlord", "mortgage", "lease", "housing"]))
       return "Rent";
-    if (d.includes("flight") || d.includes("hotel") || d.includes("airbnb") || d.includes("travel"))
+
+    if (
+      matches([
+        "travel",
+        "trip",
+        "flight",
+        "hotel",
+        "airbnb",
+        "booking",
+        "expedia",
+        "makemytrip",
+        "goibibo",
+        "ixigo",
+        "yatra",
+        "holiday",
+        "vacation",
+        "tour",
+        "journey"
+      ])
+    )
       return "Travel";
-    if (d.includes("amazon") || d.includes("flipkart") || d.includes("shopping"))
+
+    if (
+      matches([
+        "amazon",
+        "flipkart",
+        "shopping",
+        "myntra",
+        "store",
+        "mall",
+        "purchase",
+        "retail",
+        "ajio"
+      ])
+    )
       return "Shopping";
-    if (d.includes("netflix") || d.includes("spotify") || d.includes("prime"))
+
+    if (
+      matches([
+        "netflix",
+        "spotify",
+        "prime",
+        "primevideo",
+        "subscription",
+        "disney",
+        "hotstar",
+        "apple",
+        "youtube",
+        "membership"
+      ])
+    )
       return "Subscriptions";
-    if (d.includes("movie") || d.includes("cinema") || d.includes("concert") || d.includes("game"))
+
+    if (
+      matches([
+        "movie",
+        "cinema",
+        "concert",
+        "game",
+        "bookmyshow",
+        "theatre",
+        "event",
+        "show"
+      ])
+    )
       return "Entertainment";
-    if (d.includes("course") || d.includes("tuition") || d.includes("education") || d.includes("training"))
+
+    if (
+      matches([
+        "course",
+        "tuition",
+        "education",
+        "training",
+        "udemy",
+        "coursera",
+        "school",
+        "college",
+        "exam",
+        "class"
+      ])
+    )
       return "Education";
-    if (d.includes("electricity") || d.includes("mobile") || d.includes("bill"))
+
+    if (
+      matches([
+        "electricity",
+        "mobile",
+        "bill",
+        "recharge",
+        "water",
+        "gas",
+        "wifi",
+        "internet",
+        "broadband",
+        "utility",
+        "phone"
+      ])
+    )
       return "Utilities";
-    if (d.includes("gym") || d.includes("health"))
+
+    if (
+      matches([
+        "gym",
+        "health",
+        "hospital",
+        "medical",
+        "pharmacy",
+        "clinic",
+        "doctor",
+        "fitness",
+        "wellness"
+      ])
+    )
       return "Health";
-    if (d.includes("sip") || d.includes("mutual fund") || d.includes("investment"))
+
+    if (
+      matches([
+        "sip",
+        "mutual fund",
+        "investment",
+        "stocks",
+        "equity",
+        "fd",
+        "deposit",
+        "ppf",
+        "nps"
+      ])
+    )
       return "Savings";
-    if (d.includes("salary") || d.includes("bonus"))
+
+    if (matches(["salary", "bonus", "payroll", "income", "credited"]))
       return "Income";
+
     return "Others";
   };
 
@@ -349,6 +511,9 @@ const SmartSpend = () => {
     const cleaned = value.trim();
     if (!cleaned) return "";
     const lower = cleaned.toLowerCase();
+    if (["other", "others", "misc", "miscellaneous", "uncategorized", "unknown"].includes(lower)) {
+      return "Others";
+    }
     const match = categoryOptions.find((option) => option.toLowerCase() === lower);
     return match || cleaned;
   };
@@ -3005,6 +3170,80 @@ const SmartSpend = () => {
 
           .greeting-status .badge-text {
             display: none;
+          }
+        }
+
+        /* ===== 6.5-INCH MOBILE REFINEMENTS ===== */
+        @media (min-width: 360px) and (max-width: 430px) and (min-height: 740px) {
+          .transaction-list {
+            gap: 14px;
+          }
+
+          .transaction-item {
+            padding: 16px 14px;
+          }
+
+          .transaction-left {
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+          }
+
+          .transaction-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 11px;
+            font-size: 18px;
+          }
+
+          .transaction-details {
+            min-width: 0;
+          }
+
+          .transaction-details h4 {
+            font-size: 14px;
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+
+          .transaction-details p {
+            font-size: 11px;
+            line-height: 1.3;
+          }
+
+          .transaction-right {
+            gap: 10px;
+            flex-shrink: 0;
+          }
+
+          .transaction-amount {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            min-width: 92px;
+          }
+
+          .transaction-amount .amount {
+            font-size: 15px;
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+            white-space: nowrap;
+          }
+
+          .transaction-amount .category {
+            max-width: 110px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+          }
+
+          .delete-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 9px;
           }
         }
       `}</style>
