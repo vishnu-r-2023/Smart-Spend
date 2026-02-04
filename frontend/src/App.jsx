@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+﻿import React, { useState, useEffect, useRef } from 'react';
 import { LineChart, Line, PieChart, Pie, BarChart, Bar, AreaChart, Area, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { Upload, TrendingUp, TrendingDown, DollarSign, PieChart as PieIcon, BarChart3, Lightbulb, Calendar, Filter, Moon, Sun, Activity, Wallet, CreditCard, Target, Plus, LogOut, User, Settings, Shield, Bell, Key, Sparkles, Tags, Camera, Trash2 } from 'lucide-react';
 
@@ -787,6 +787,7 @@ const SmartSpend = () => {
       const created = await res.json();
       setTransactions((prev) => [created, ...prev]);
       setEntrySuccess("Entry added successfully");
+      setShowEntryModal(false);
       setEntryForm({
         type: entryForm.type,
         amount: "",
@@ -1849,6 +1850,11 @@ const SmartSpend = () => {
           font-size: 13px;
           font-weight: 600;
           white-space: nowrap;
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          line-height: 1.1;
+          flex: 0 0 auto;
           cursor: pointer;
           transition: all 0.2s ease;
           border: 1px solid ${darkMode ? 'rgba(51, 65, 85, 0.8)' : 'rgba(226, 232, 240, 1)'};
@@ -2415,6 +2421,8 @@ const SmartSpend = () => {
           padding: 32px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
           animation: slideUp 0.3s ease;
+          max-height: 90vh;
+          overflow-y: auto;
         }
 
         .confirm-modal {
@@ -2440,6 +2448,8 @@ const SmartSpend = () => {
           padding: 28px;
           box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
           animation: slideUp 0.3s ease;
+          max-height: 90vh;
+          overflow-y: auto;
         }
 
         .account-content {
@@ -2726,6 +2736,26 @@ const SmartSpend = () => {
         .upload-hint {
           font-size: 14px;
           color: ${darkMode ? '#94A3B8' : '#64748B'};
+        }
+
+        .file-name-row {
+          margin-top: 16px;
+          font-size: 14px;
+          font-weight: 600;
+          color: #6366F1;
+          width: 100%;
+          max-width: 100%;
+          overflow: hidden;
+        }
+
+        .file-name {
+          display: block;
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+          text-align: center;
+          margin: 0 auto;
         }
 
         .format-tags {
@@ -3244,6 +3274,450 @@ const SmartSpend = () => {
             width: 32px;
             height: 32px;
             border-radius: 9px;
+          }
+        }
+
+        /* ===== SAFE AREA INSETS (NOTCHED DEVICES) ===== */
+        .header {
+          padding-top: max(env(safe-area-inset-top), 16px);
+        }
+
+        .bottom-nav {
+          padding-bottom: max(env(safe-area-inset-bottom), 20px);
+        }
+
+        .main-content {
+          padding-left: max(env(safe-area-inset-left), 16px);
+          padding-right: max(env(safe-area-inset-right), 16px);
+        }
+
+        /* ===== TOUCH-FRIENDLY IMPROVEMENTS ===== */
+        .icon-btn,
+        .nav-item,
+        .filter-chip,
+        .btn {
+          min-height: 44px;
+          min-width: 44px;
+        }
+
+        .nav-item,
+        .filter-chip,
+        .insight-card,
+        .transaction-item,
+        .stat-card {
+          -webkit-tap-highlight-color: rgba(99, 102, 241, 0.1);
+          -webkit-touch-callout: none;
+          user-select: none;
+        }
+
+        /* ===== PERFORMANCE OPTIMIZATIONS ===== */
+        .stat-card,
+        .insight-card,
+        .transaction-item,
+        .chart-card {
+          will-change: transform;
+          transform: translateZ(0);
+          backface-visibility: hidden;
+        }
+
+        .category-filters,
+        .transaction-list,
+        .main-content {
+          -webkit-overflow-scrolling: touch;
+          overflow-scrolling: touch;
+        }
+
+        /* ===== MOBILE-SPECIFIC OVERRIDES (6.5" DISPLAYS) ===== */
+        @media (max-width: 428px) {
+          .app-container {
+            overflow-x: hidden;
+          }
+
+          .header {
+            padding: 14px 0;
+          }
+
+          .header-content {
+            padding: 0 14px;
+          }
+
+          .logo {
+            font-size: 20px;
+          }
+
+          .tagline {
+            font-size: 9px;
+          }
+
+          .greeting {
+            padding: 8px 10px;
+            gap: 8px;
+          }
+
+          .greeting-name {
+            font-size: 11px;
+          }
+
+          .icon-btn {
+            width: 36px;
+            height: 36px;
+          }
+
+          .main-content {
+            padding: 14px;
+            padding-bottom: 95px;
+          }
+
+          .stats-grid {
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+          }
+
+          .stat-card {
+            padding: 14px;
+            border-radius: 12px;
+          }
+
+          .stat-icon {
+            width: 38px;
+            height: 38px;
+          }
+
+          .stat-icon svg {
+            width: 18px;
+            height: 18px;
+          }
+
+          .stat-label {
+            font-size: 10px;
+            margin-bottom: 6px;
+          }
+
+          .stat-value {
+            font-size: 18px;
+            margin-bottom: 6px;
+          }
+
+          .stat-change {
+            font-size: 10px;
+          }
+
+          .stat-change svg {
+            width: 10px;
+            height: 10px;
+          }
+
+          .section-title {
+            font-size: 17px;
+            margin-bottom: 12px;
+            gap: 8px;
+          }
+
+          .section-title svg {
+            width: 20px;
+            height: 20px;
+          }
+
+          .insights-grid {
+            grid-template-columns: 1fr;
+            gap: 10px;
+          }
+
+          .insight-card {
+            padding: 12px;
+            border-radius: 12px;
+          }
+
+          .insight-icon {
+            font-size: 26px;
+          }
+
+          .insight-content h4 {
+            font-size: 12px;
+            margin-bottom: 4px;
+          }
+
+          .insight-content p {
+            font-size: 10px;
+            line-height: 1.5;
+          }
+
+          .charts-row {
+            grid-template-columns: 1fr;
+            gap: 16px;
+          }
+
+          .chart-card {
+            padding: 16px;
+            border-radius: 14px;
+          }
+
+          .chart-card.full-width {
+            padding: 18px;
+          }
+
+          .chart-header {
+            margin-bottom: 16px;
+          }
+
+          .chart-title {
+            font-size: 14px;
+            gap: 6px;
+          }
+
+          .chart-title svg {
+            width: 14px;
+            height: 14px;
+          }
+
+          .chart-subtitle {
+            font-size: 10px;
+          }
+
+          .bottom-nav {
+            padding: 10px 6px 18px;
+            gap: 4px;
+          }
+
+          .nav-item {
+            padding: 8px 10px;
+            min-width: 68px;
+            border-radius: 10px;
+          }
+
+          .nav-icon {
+            width: 18px;
+            height: 18px;
+          }
+
+          .nav-label {
+            font-size: 9px;
+          }
+
+          .category-filters {
+            gap: 6px;
+            padding-bottom: 12px;
+          }
+
+          .filter-chip {
+            padding: 8px 12px;
+            font-size: 10px;
+            border-radius: 8px;
+            height: 36px;
+            line-height: 1;
+          }
+
+          .transaction-list {
+            gap: 8px;
+          }
+
+          .transaction-item {
+            padding: 12px;
+            border-radius: 10px;
+          }
+
+          .transaction-icon {
+            width: 38px;
+            height: 38px;
+            font-size: 16px;
+          }
+
+          .transaction-left {
+            gap: 10px;
+          }
+
+          .transaction-details h4 {
+            font-size: 12px;
+            margin-bottom: 4px;
+            line-height: 1.25;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+          }
+
+          .transaction-details p {
+            font-size: 10px;
+            line-height: 1.3;
+          }
+
+          .transaction-amount .amount {
+            font-size: 14px;
+            margin-bottom: 4px;
+            line-height: 1.2;
+            font-variant-numeric: tabular-nums;
+          }
+
+          .transaction-amount .category {
+            font-size: 10px;
+            line-height: 1.2;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 110px;
+          }
+
+          .upload-content,
+          .entry-content,
+          .confirm-content {
+            padding: 18px;
+            border-radius: 20px;
+          }
+
+          .entry-header,
+          .confirm-title {
+            font-size: 18px;
+          }
+
+          .pill-group {
+            gap: 8px;
+          }
+
+          .pill {
+            padding: 10px;
+            font-size: 13px;
+          }
+
+          .form-field {
+            gap: 6px;
+          }
+
+          .form-label {
+            font-size: 11px;
+          }
+
+          .form-input,
+          .form-select,
+          .form-textarea {
+            font-size: 13px;
+            padding: 10px 12px;
+            border-radius: 8px;
+          }
+
+          .form-textarea {
+            min-height: 70px;
+          }
+
+          .form-error {
+            font-size: 10px;
+            margin-top: 4px;
+          }
+
+          .action-buttons {
+            gap: 8px;
+            margin-top: 16px;
+          }
+
+          .btn {
+            padding: 11px;
+            font-size: 13px;
+            border-radius: 10px;
+          }
+
+          .upload-zone {
+            padding: 32px 20px;
+            border-radius: 14px;
+          }
+
+          .upload-icon {
+            width: 64px;
+            height: 64px;
+            margin-bottom: 14px;
+          }
+
+          .upload-icon svg {
+            width: 32px;
+            height: 32px;
+          }
+
+          .upload-text {
+            font-size: 13px;
+            margin-bottom: 6px;
+          }
+
+          .upload-hint {
+            font-size: 11px;
+          }
+
+          .format-tags {
+            gap: 6px;
+            margin-bottom: 16px;
+          }
+
+          .format-tag {
+            padding: 6px 12px;
+            font-size: 10px;
+          }
+
+          .auth-card {
+            padding: 24px;
+            border-radius: 20px;
+          }
+
+          .auth-title {
+            font-size: 20px;
+          }
+
+          .auth-subtitle {
+            font-size: 12px;
+          }
+
+          .auth-form {
+            gap: 14px;
+          }
+
+          .auth-input {
+            font-size: 13px;
+          }
+
+          .auth-switch {
+            font-size: 12px;
+            margin-top: 16px;
+          }
+        }
+
+        /* ===== EXTRA SMALL DEVICES (< 375px) ===== */
+        @media (max-width: 374px) {
+          .stats-grid {
+            grid-template-columns: 1fr;
+          }
+
+          .stat-value {
+            font-size: 22px;
+          }
+
+          .nav-item {
+            min-width: 60px;
+          }
+
+          .nav-label {
+            font-size: 8px;
+          }
+        }
+
+        /* ===== LANDSCAPE MODE (HEIGHT < 500px) ===== */
+        @media (max-height: 500px) and (orientation: landscape) {
+          .upload-content,
+          .entry-content,
+          .confirm-content {
+            max-height: 80vh;
+            overflow-y: auto;
+          }
+
+          .stats-grid {
+            grid-template-columns: repeat(4, 1fr);
+          }
+
+          .insights-grid {
+            grid-template-columns: repeat(2, 1fr);
+          }
+        }
+
+        /* ===== NOTCH COMPATIBILITY ===== */
+        @supports (padding: max(0px)) {
+          .app-container {
+            padding-left: max(0px, env(safe-area-inset-left));
+            padding-right: max(0px, env(safe-area-inset-right));
           }
         }
       `}</style>
@@ -4355,8 +4829,8 @@ const SmartSpend = () => {
               <div className="upload-text">Click to upload or drag & drop</div>
               <div className="upload-hint">Secure & encrypted</div>
               {selectedFile && (
-                <div style={{ marginTop: "16px", fontSize: "14px", fontWeight: '600', color: '#6366F1' }}>
-                  📄 {selectedFile.name}
+                <div className="file-name-row">
+                  <span className="file-name">File: {selectedFile.name}</span>
                 </div>
               )}
             </div>
