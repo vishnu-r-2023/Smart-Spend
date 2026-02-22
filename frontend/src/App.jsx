@@ -13,6 +13,15 @@ import ManualEntryModal from './components/ManualEntryModal';
 import AccountModal from './components/AccountModal';
 import DeleteModal from './components/DeleteModal';
 import BulkDeleteModal from './components/BulkDeleteModal';
+import {
+  SMS_PERMISSION_REQUIRED_MESSAGE,
+  ensureSMSPermission,
+  filterBankMessages,
+  isSMSImportSupported,
+  parseSMSMessages,
+  readBankSMS,
+  sendToBackend
+} from './services/smsService';
 import './styles/App.css';
 
 const SmartSpend = () => {
@@ -26,6 +35,8 @@ const SmartSpend = () => {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [uploading, setUploading] = useState(false);
+  const [smsImporting, setSmsImporting] = useState(false);
+  const [smsToast, setSmsToast] = useState("");
   const [showEntryModal, setShowEntryModal] = useState(false);
   const [entryForm, setEntryForm] = useState({
     type: "expense",
@@ -102,8 +113,13 @@ const SmartSpend = () => {
   const [pullReady, setPullReady] = useState(false);
   const pullStartRef = useRef(null);
   const pullingRef = useRef(false);
+  const smsToastTimerRef = useRef(null);
 
   const isAuthenticated = authStatus === "authenticated";
+  const smsSyncScope = user?.id || "guest";
+  const smsPermissionPromptKey = `smartspend_sms_permission_prompted_${smsSyncScope}`;
+  const smsSyncStartKey = `smartspend_sms_sync_start_${smsSyncScope}`;
+  const smsSyncCursorKey = `smartspend_sms_sync_cursor_${smsSyncScope}`;
 
   const categoryOptions = [
     "Food & Dining",
@@ -321,6 +337,26 @@ const SmartSpend = () => {
     const key = `smartspend_linked_accounts_${user.id}`;
     localStorage.setItem(key, JSON.stringify(linkedAccounts));
   }, [linkedAccounts, user?.id]);
+
+  useEffect(() => {
+    if (!isSMSImportSupported()) return;
+    if (localStorage.getItem(smsPermissionPromptKey) === "1") return;
+
+    localStorage.setItem(smsPermissionPromptKey, "1");
+    ensureSMSPermission().catch((err) => {
+      if ((err?.message || "") === SMS_PERMISSION_REQUIRED_MESSAGE) {
+        alert(SMS_PERMISSION_REQUIRED_MESSAGE);
+      }
+    });
+  }, [smsPermissionPromptKey]);
+
+  useEffect(() => {
+    return () => {
+      if (smsToastTimerRef.current) {
+        clearTimeout(smsToastTimerRef.current);
+      }
+    };
+  }, []);
 
   // Calculate statistics
   const totalIncome = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
@@ -702,6 +738,108 @@ const SmartSpend = () => {
       console.error(err);
     } finally {
       setUploading(false);
+    }
+  };
+
+  const showSmsToast = (message) => {
+    if (!message) return;
+    setSmsToast(message);
+    if (smsToastTimerRef.current) {
+      clearTimeout(smsToastTimerRef.current);
+    }
+    smsToastTimerRef.current = setTimeout(() => {
+      setSmsToast("");
+      smsToastTimerRef.current = null;
+    }, 2800);
+  };
+
+  const handleSmsImport = async () => {
+    if (!authToken) {
+      alert("Please login to import SMS transactions");
+      return;
+    }
+
+    if (!isSMSImportSupported()) {
+      alert("SMS import is available only on Android");
+      return;
+    }
+
+    try {
+      setSmsImporting(true);
+      await ensureSMSPermission();
+
+      const now = Date.now();
+      const syncStartedAt = Number(localStorage.getItem(smsSyncStartKey) || 0);
+
+      if (!syncStartedAt) {
+        localStorage.setItem(smsSyncStartKey, String(now));
+        localStorage.setItem(smsSyncCursorKey, String(now));
+        alert("SMS sync enabled. New bank SMS will be imported from now.");
+        return;
+      }
+
+      const syncCursor = Number(localStorage.getItem(smsSyncCursorKey) || syncStartedAt);
+      const smsMessages = await readBankSMS({ fromTimestamp: syncCursor, limit: 1000 });
+      const latestSeenTimestamp = smsMessages.reduce(
+        (max, sms) => Math.max(max, Number(sms?.timestamp) || 0),
+        syncCursor
+      );
+
+      if (smsMessages.length === 0) {
+        localStorage.setItem(smsSyncCursorKey, String(latestSeenTimestamp));
+        alert("No bank SMS found");
+        return;
+      }
+
+      const bankMessages = filterBankMessages(smsMessages);
+      if (bankMessages.length === 0) {
+        localStorage.setItem(smsSyncCursorKey, String(latestSeenTimestamp));
+        alert("No bank SMS found");
+        return;
+      }
+
+      const parsedTransactions = parseSMSMessages(bankMessages);
+      if (parsedTransactions.length === 0) {
+        localStorage.setItem(smsSyncCursorKey, String(latestSeenTimestamp));
+        alert("No transactions detected");
+        return;
+      }
+
+      const uploadResult = await sendToBackend({
+        transactions: parsedTransactions,
+        apiBase: API_BASE,
+        authToken,
+        existingTransactions: transactions
+      });
+
+      const nextCursor = Math.max(
+        latestSeenTimestamp,
+        Number(uploadResult.latestTimestamp) || 0,
+        syncCursor
+      );
+      localStorage.setItem(smsSyncCursorKey, String(nextCursor));
+
+      if (uploadResult.insertedCount > 0) {
+        await fetchTransactions(authToken);
+        showSmsToast(`${uploadResult.insertedCount} transactions imported from SMS`);
+        return;
+      }
+
+      if (uploadResult.skippedDuplicates > 0) {
+        alert("No new transactions found to import");
+        return;
+      }
+
+      alert("No transactions detected");
+    } catch (err) {
+      if ((err?.message || "") === SMS_PERMISSION_REQUIRED_MESSAGE) {
+        alert(SMS_PERMISSION_REQUIRED_MESSAGE);
+      } else {
+        alert(err?.message || "Backend error while importing SMS transactions");
+      }
+      console.error(err);
+    } finally {
+      setSmsImporting(false);
     }
   };
 
@@ -1485,6 +1623,8 @@ const SmartSpend = () => {
             setSelectedFile={setSelectedFile}
             handleFileUpload={handleFileUpload}
             uploading={uploading}
+            handleSmsImport={handleSmsImport}
+            smsImporting={smsImporting}
           />
 
           <ManualEntryModal
@@ -1535,6 +1675,8 @@ const SmartSpend = () => {
           />
         </>
       )}
+
+      {smsToast && <div className="sms-import-toast">{smsToast}</div>}
     </div>
   );
 };

@@ -1,5 +1,6 @@
 import React from "react";
 import { Upload } from "lucide-react";
+import SmsImportButton from "./SmsImportButton";
 
 const UploadModal = ({
   showUploadModal,
@@ -7,12 +8,14 @@ const UploadModal = ({
   selectedFile,
   setSelectedFile,
   handleFileUpload,
-  uploading
+  uploading,
+  handleSmsImport,
+  smsImporting
 }) => {
   if (!showUploadModal) return null;
 
   return (
-    <div className="upload-modal" onClick={() => setShowUploadModal(false)}>
+    <div className="upload-modal" onClick={() => (!uploading && !smsImporting ? setShowUploadModal(false) : null)}>
       <div className="upload-content" onClick={(e) => e.stopPropagation()}>
         <h2 className="upload-header">Upload Bank Statement</h2>
         <div className="upload-zone" onClick={() => document.getElementById("fileInput").click()}>
@@ -40,9 +43,16 @@ const UploadModal = ({
           <span className="format-tag">XLS</span>
           <span className="format-tag">XLSX</span>
         </div>
+        <div className="action-buttons action-buttons-spaced">
+          <SmsImportButton
+            onClick={handleSmsImport}
+            loading={smsImporting}
+            disabled={uploading}
+          />
+        </div>
         <div className="action-buttons">
-          <button className="btn btn-secondary" onClick={() => setShowUploadModal(false)}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleFileUpload} disabled={uploading}>
+          <button className="btn btn-secondary" onClick={() => setShowUploadModal(false)} disabled={uploading || smsImporting}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleFileUpload} disabled={uploading || smsImporting}>
             {uploading ? "Uploading..." : "Upload"}
           </button>
         </div>
