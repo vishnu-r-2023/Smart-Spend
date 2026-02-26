@@ -774,7 +774,7 @@ const SmartSpend = () => {
       if (!syncStartedAt) {
         localStorage.setItem(smsSyncStartKey, String(now));
         localStorage.setItem(smsSyncCursorKey, String(now));
-        alert("SMS sync enabled. New bank SMS will be imported from now.");
+        alert("SMS sync enabled. New bank SMS will be imported from now. After receiving SMS, tap Import from SMS again.");
         return;
       }
 

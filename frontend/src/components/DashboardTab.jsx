@@ -48,6 +48,22 @@ const DashboardTab = ({
   COLORS,
   CustomTooltip
 }) => {
+
+const axisColor = darkMode ? "#94A3B8" : "#64748B";
+const formatNumber = (value) => {
+  if (value === 0) return "0";
+  if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
+  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}K`;
+  return value;
+};
+
+const chartMargin = { top: 5, right: 10, left: 0, bottom: 5 };
+
+const yAxisProps = {
+  width: 55,
+  stroke: axisColor,
+  tickFormatter: formatNumber
+};
   return (
     <>
       <div className="stats-grid">
@@ -146,7 +162,7 @@ const DashboardTab = ({
           <div className="chart-subtitle">Income, Expenses & Savings Trends</div>
         </div>
         <ResponsiveContainer width="100%" height={360}>
-          <AreaChart data={yearlyData}>
+          <AreaChart data={yearlyData}  margin={chartMargin}>
             <defs>
               <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
@@ -183,13 +199,28 @@ const DashboardTab = ({
             <div className="chart-subtitle">Income trend ({latestYear})</div>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
-              <XAxis dataKey="label" stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
-              <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
-              <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="income" stroke="#10B981" strokeWidth={2.5} dot={{ fill: "#10B981", r: 4 }} activeDot={{ r: 6 }} />
-            </LineChart>
+            <LineChart data={monthlyData} margin={chartMargin}>
+                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148,163,184,0.1)" : "rgba(148,163,184,0.2)"} />
+
+                <XAxis
+                  dataKey="label"
+                  stroke={axisColor}
+                  className="axis-sm"
+                />
+
+                <YAxis {...yAxisProps} className="axis-sm" />
+
+                <Tooltip content={<CustomTooltip />} />
+
+                <Line
+                  type="monotone"
+                  dataKey="income"
+                  stroke="#10B981"
+                  strokeWidth={2.5}
+                  dot={{ fill: "#10B981", r: 4 }}
+                  activeDot={{ r: 6 }}
+                />
+              </LineChart>
           </ResponsiveContainer>
         </div>
 
@@ -202,12 +233,23 @@ const DashboardTab = ({
             <div className="chart-subtitle">Spending trend ({latestYear})</div>
           </div>
           <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
-              <XAxis dataKey="label" stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
-              <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
+            <LineChart data={monthlyData} margin={chartMargin}>
+              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148,163,184,0.1)" : "rgba(148,163,184,0.2)"} />
+
+              <XAxis dataKey="label" stroke={axisColor} className="axis-sm" />
+
+              <YAxis {...yAxisProps} className="axis-sm" />
+
               <Tooltip content={<CustomTooltip />} />
-              <Line type="monotone" dataKey="expenses" stroke="#EF4444" strokeWidth={2.5} dot={{ fill: "#EF4444", r: 4 }} activeDot={{ r: 6 }} />
+
+              <Line
+                type="monotone"
+                dataKey="expenses"
+                stroke="#EF4444"
+                strokeWidth={2.5}
+                dot={{ fill: "#EF4444", r: 4 }}
+                activeDot={{ r: 6 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
@@ -226,9 +268,9 @@ const DashboardTab = ({
             <PieChart>
               <Pie
                 data={categoryPercentageData}
-                cx="50%"
+                cx="47%"
                 cy="50%"
-                outerRadius={90}
+                outerRadius={80}
                 dataKey="value"
                 labelLine={false}
               >
@@ -256,7 +298,7 @@ const DashboardTab = ({
             <div className="chart-subtitle">Highest spending areas</div>
           </div>
           <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={categoryData.slice(0, 6)}>
+            <BarChart data={categoryData.slice(0, 6)} chartMargin={chartMargin}>
               <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
               <XAxis dataKey="name" stroke={darkMode ? "#94A3B8" : "#64748B"} angle={-20} textAnchor="end" height={90} className="axis-xs" />
               <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />

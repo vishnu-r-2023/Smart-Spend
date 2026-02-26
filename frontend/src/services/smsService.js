@@ -2,7 +2,29 @@ import { Capacitor, registerPlugin } from "@capacitor/core";
 
 export const SMS_PERMISSION_REQUIRED_MESSAGE = "SMS access required to auto-detect transactions";
 
-const SMS_PLUGIN_NAMES = ["SmsRetriever", "SMSRetriever", "CapacitorSmsRetriever"];
+const SMS_PLUGIN_NAMES = ["SmsReader"];
+const CHECK_PERMISSION_METHOD_NAMES = [
+  "checkPermissions",
+  "checkPermission",
+  "hasPermissions",
+  "hasPermission"
+];
+const REQUEST_PERMISSION_METHOD_NAMES = [
+  "requestPermissions",
+  "requestPermission",
+  "askPermissions",
+  "askPermission"
+];
+const GET_MESSAGES_METHOD_NAMES = [
+  "getAllSms",
+  "getMessages",
+  "readSMS",
+  "readSms",
+  "getSMS",
+  "getSmsMessages",
+  "listMessages"
+];
+
 const SENDER_KEYWORDS = ["BANK", "BNK", "SBI", "ICICI", "HDFC", "AXIS", "IND", "CAN", "CB", "UPI", "PAYTM"];
 const DEBIT_KEYWORDS = ["DEBITED", "SPENT", "WITHDRAWN", "PURCHASE", "PAID", "TXN OF"];
 const CREDIT_KEYWORDS = ["CREDITED", "DEPOSITED", "SALARY", "RECEIVED", "REFUND", "CASHBACK"];
@@ -10,11 +32,6 @@ const TRANSACTION_HINTS = [...DEBIT_KEYWORDS, ...CREDIT_KEYWORDS, "TXN", "UPI", 
 const AMOUNT_REGEX = /\u20B9?\s?(\d{1,3}(,\d{3})*(\.\d{2})?)/g;
 const AMOUNT_FALLBACK_REGEX = /(?:\u20B9|rs\.?|inr)?\s?(\d+(?:,\d{3})*(?:\.\d{1,2})?)/gi;
 const DATE_REGEX = /\b(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})\b/;
-const LIVE_SMS_BUFFER_KEY = "smartspend_sms_live_buffer";
-const LIVE_SMS_BUFFER_LIMIT = 1000;
-
-let smsListenerInitialized = false;
-let smsListenerPromise = null;
 
 const isMissingMethodError = (error) => {
   const message = String(error?.message || error || "").toLowerCase();
@@ -25,11 +42,6 @@ const isMissingMethodError = (error) => {
     message.includes("unable to find") ||
     message.includes("unimplemented")
   );
-};
-
-const isBadPayloadError = (error) => {
-  const message = String(error?.message || error || "").toLowerCase();
-  return message.includes("argument") || message.includes("invalid") || message.includes("json");
 };
 
 const callSmsPlugin = async (methodNames, payloads = [undefined]) => {
@@ -49,7 +61,7 @@ const callSmsPlugin = async (methodNames, payloads = [undefined]) => {
           return await plugin[methodName](payload);
         } catch (error) {
           lastError = error;
-          if (isMissingMethodError(error) || isBadPayloadError(error)) {
+          if (isMissingMethodError(error)) {
             continue;
           }
           throw error;
@@ -110,101 +122,6 @@ const extractMessagesArray = (payload) => {
   if (Array.isArray(payload?.sms)) return payload.sms;
   if (Array.isArray(payload?.list)) return payload.list;
   return [];
-};
-
-const getLocalStorage = () => {
-  if (typeof window === "undefined") return null;
-  return window.localStorage || null;
-};
-
-const loadLiveSMSBuffer = () => {
-  const storage = getLocalStorage();
-  if (!storage) return [];
-
-  try {
-    const raw = storage.getItem(LIVE_SMS_BUFFER_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
-      .map((item) => normalizeSMS(item))
-      .filter((item) => item.body.length > 0 && Number.isFinite(item.timestamp) && item.timestamp > 0);
-  } catch (error) {
-    return [];
-  }
-};
-
-const saveLiveSMSBuffer = (messages = []) => {
-  const storage = getLocalStorage();
-  if (!storage) return;
-
-  const trimmed = messages
-    .slice(-LIVE_SMS_BUFFER_LIMIT)
-    .map((message) => ({
-      sender: String(message?.sender || ""),
-      body: String(message?.body || ""),
-      timestamp: Number(message?.timestamp) || 0
-    }));
-
-  storage.setItem(LIVE_SMS_BUFFER_KEY, JSON.stringify(trimmed));
-};
-
-const pushLiveSMSMessage = (body = "", sender = "") => {
-  const messageText = String(body || "").trim();
-  if (!messageText) return;
-
-  const current = loadLiveSMSBuffer();
-  current.push({
-    sender: String(sender || ""),
-    body: messageText,
-    timestamp: Date.now()
-  });
-  saveLiveSMSBuffer(current);
-};
-
-const readLiveSMSBuffer = ({ minDate = 0, limit = 1000 } = {}) => {
-  const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 1000));
-  return loadLiveSMSBuffer()
-    .filter((message) => message.timestamp >= minDate)
-    .sort((a, b) => b.timestamp - a.timestamp)
-    .slice(0, safeLimit);
-};
-
-const initializeLiveSMSReceiver = async () => {
-  if (!isSMSImportSupported()) return false;
-  if (smsListenerInitialized) return true;
-  if (smsListenerPromise) return smsListenerPromise;
-
-  smsListenerPromise = (async () => {
-    const plugin = registerPlugin("SmsRetriever");
-
-    if (typeof plugin.addListener === "function") {
-      await plugin.addListener("onSmsReceive", async (payload) => {
-        if (payload?.message) {
-          pushLiveSMSMessage(payload.message);
-        }
-
-        try {
-          await plugin.startSmsReceiver();
-        } catch (error) {
-          // Ignore retriever restart failures; user can restart import flow.
-        }
-      });
-    }
-
-    await plugin.startSmsReceiver();
-    smsListenerInitialized = true;
-    return true;
-  })()
-    .catch((error) => {
-      smsListenerInitialized = false;
-      throw error;
-    })
-    .finally(() => {
-      smsListenerPromise = null;
-    });
-
-  return smsListenerPromise;
 };
 
 const normalizeYear = (year) => {
@@ -370,55 +287,33 @@ export const ensureSMSPermission = async () => {
     throw new Error("SMS import is available only on Android");
   }
 
-  const permissionPayloads = [
-    undefined,
-    { permissions: ["sms", "readSms", "receiveSms"] },
-    { permissions: ["READ_SMS", "RECEIVE_SMS"] }
-  ];
-
-  let permissionDenied = false;
-  let checkResult = null;
-
-  try {
-    checkResult = await callSmsPlugin(
-      ["checkPermissions", "checkPermission", "getPermissions", "hasPermission"],
-      permissionPayloads
-    );
-  } catch (error) {
-    checkResult = null;
-  }
+  const permissionPayloads = [undefined, { permissions: ["sms"] }];
+  const checkResult = await callSmsPlugin(CHECK_PERMISSION_METHOD_NAMES, permissionPayloads).catch((error) => {
+    if (isMissingMethodError(error)) return null;
+    throw error;
+  });
 
   if (isPermissionGranted(checkResult)) {
     return { granted: true };
   }
 
-  try {
-    const requestResult = await callSmsPlugin(
-      ["requestPermissions", "requestPermission"],
-      permissionPayloads
-    );
-
-    if (isPermissionGranted(requestResult)) {
-      return { granted: true };
-    }
-
-    permissionDenied = true;
-  } catch (error) {
+  const requestResult = await callSmsPlugin(REQUEST_PERMISSION_METHOD_NAMES, permissionPayloads).catch((error) => {
     const message = String(error?.message || "").toLowerCase();
-    if (message.includes("denied") || message.includes("permission")) {
-      permissionDenied = true;
-    }
-  }
-
-  try {
-    await initializeLiveSMSReceiver();
-    return { granted: true };
-  } catch (error) {
-    if (permissionDenied) {
-      throw new Error(SMS_PERMISSION_REQUIRED_MESSAGE);
+    if (
+      message.includes("denied") ||
+      message.includes("permission") ||
+      message === SMS_PERMISSION_REQUIRED_MESSAGE.toLowerCase()
+    ) {
+      return null;
     }
     throw error;
+  });
+
+  if (!isPermissionGranted(requestResult)) {
+    throw new Error(SMS_PERMISSION_REQUIRED_MESSAGE);
   }
+
+  return { granted: true };
 };
 
 export const readBankSMS = async ({ fromTimestamp = 0, limit = 1000 } = {}) => {
@@ -428,30 +323,20 @@ export const readBankSMS = async ({ fromTimestamp = 0, limit = 1000 } = {}) => {
 
   const minDate = Math.max(0, Number(fromTimestamp) || 0);
   const safeLimit = Math.max(1, Math.min(1000, Number(limit) || 1000));
-  const readPayloads = [
-    { box: "inbox", minDate, maxCount: safeLimit },
-    { folder: "inbox", minDate, limit: safeLimit },
+
+  const response = await callSmsPlugin(GET_MESSAGES_METHOD_NAMES, [
+    { minDate, maxCount: safeLimit, limit: safeLimit },
     { minDate, limit: safeLimit },
     { limit: safeLimit },
     undefined
-  ];
+  ]);
 
-  try {
-    const response = await callSmsPlugin(
-      ["getMessages", "readSMS", "getSMS", "listSMS", "getSmsList", "readInbox"],
-      readPayloads
-    );
-
-    return extractMessagesArray(response)
-      .map(normalizeSMS)
-      .filter((item) => item.body.length > 0)
-      .filter((item) => (item.timestamp === 0 ? minDate === 0 : item.timestamp >= minDate))
-      .sort((a, b) => b.timestamp - a.timestamp)
-      .slice(0, safeLimit);
-  } catch (error) {
-    await initializeLiveSMSReceiver();
-    return readLiveSMSBuffer({ minDate, limit: safeLimit });
-  }
+  return extractMessagesArray(response)
+    .map(normalizeSMS)
+    .filter((item) => item.body.length > 0)
+    .filter((item) => (item.timestamp === 0 ? minDate === 0 : item.timestamp >= minDate))
+    .sort((a, b) => b.timestamp - a.timestamp)
+    .slice(0, safeLimit);
 };
 
 export const filterBankMessages = (messages = []) => {
