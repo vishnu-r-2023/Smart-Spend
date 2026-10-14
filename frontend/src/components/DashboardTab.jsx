@@ -1,390 +1,42 @@
 import React from "react";
-import {
-  LineChart,
-  Line,
-  PieChart,
-  Pie,
-  BarChart,
-  Bar,
-  AreaChart,
-  Area,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer
-} from "recharts";
-import {
-  TrendingUp,
-  TrendingDown,
-  DollarSign,
-  PieChart as PieIcon,
-  BarChart3,
-  Lightbulb,
-  Calendar,
-  Activity,
-  Wallet,
-  CreditCard,
-  Target
-} from "lucide-react";
+import { ResponsiveContainer, AreaChart, Area, PieChart, Pie, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from "recharts";
+import { Activity, BarChart3, CalendarDays, CircleDollarSign, Lightbulb, TrendingDown, TrendingUp, Wallet } from "lucide-react";
+import RecommendationCard from "./RecommendationCard";
 
-const DashboardTab = ({
-  totalIncome,
-  totalExpenses,
-  totalSavings,
-  savingsRate,
-  expenseChangePercent,
-  transactions,
-  insights,
-  yearlyData,
-  monthlyData,
-  latestYear,
-  categoryPercentageData,
-  categoryData,
-  savingsVsSpendingData,
-  darkMode,
-  COLORS,
-  CustomTooltip
-}) => {
-
-const axisColor = darkMode ? "#94A3B8" : "#64748B";
-const formatNumber = (value) => {
-  if (value === 0) return "0";
-  if (Math.abs(value) >= 1000000) return `${(value / 1000000).toFixed(1)}M`;
-  if (Math.abs(value) >= 1000) return `${(value / 1000).toFixed(0)}K`;
-  return value;
+const COLORS = ["#45c99a", "#6f8cff", "#e7a75b", "#c17ad9", "#58b5c7", "#df7180", "#93a66a"];
+const formatCurrency = (value, currency) => new Intl.NumberFormat(undefined, { style: "currency", currency: currency || "INR", maximumFractionDigits: 0 }).format(value || 0);
+const DashboardTab = ({ analytics, analyticsLoading, analyticsError, onRetry, period, setPeriod, currency, onOpenCategory, darkMode }) => {
+  const current = analytics?.current;
+  const monthlyData = analytics?.monthlyData || [];
+  const categories = analytics?.categories || [];
+  const axis = darkMode ? "#91a1b8" : "#68778b";
+  const grid = darkMode ? "rgba(148,163,184,.12)" : "rgba(100,116,139,.14)";
+  const tooltip = { contentStyle: { background: darkMode ? "#172235" : "#fff", border: `1px solid ${grid}`, borderRadius: 12, color: darkMode ? "#f1f5f9" : "#172033" }, formatter: (value) => formatCurrency(value, currency) };
+  const recommendations = analytics?.recommendations || [];
+  const periodLabel = period === "month" ? "Month to date" : period === "quarter" ? "Quarter to date" : "Year to date";
+  const formatPeriodDate = (value) => value ? new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" }).format(new Date(`${value}T00:00:00Z`)) : "";
+  const periodRangeLabel = current?.start && current?.end ? `${formatPeriodDate(current.start)} to ${formatPeriodDate(current.end)}` : periodLabel;
+  return <div className="dashboard-page">
+    <header className="dashboard-intro"><div><span className="eyebrow">YOUR MONEY, IN FOCUS</span><h1>Financial overview</h1><p>Clear patterns from your recorded transactions.</p></div><label className="period-control">Period <select value={period} onChange={(event) => setPeriod(event.target.value)} aria-label="Analytics period"><option value="month">Monthly</option><option value="quarter">Quarterly</option><option value="year">Yearly</option></select></label></header>
+    {analyticsError && <div className="analytics-error" role="alert"><span>{analyticsError}</span><button onClick={onRetry}>Retry</button></div>}
+    {analyticsLoading && !analytics ? <div className="overview-grid" aria-label="Loading financial overview">{[1,2,3,4].map((i)=><div key={i} className="overview-card skeleton-card"><i/><i/><i/></div>)}</div> : current ? <>
+      <div className="overview-grid">
+        <article className="overview-card primary-overview"><span className="overview-label"><Wallet size={16}/>Income · {periodLabel}</span><strong>{formatCurrency(current.income,currency)}</strong><small>{analytics?.changes?.incomePercent == null ? "No comparable income period" : `${analytics.changes.incomePercent > 0 ? "+" : ""}${analytics.changes.incomePercent.toFixed(1)}% vs previous period`}</small></article>
+        <article className="overview-card"><span className="overview-label"><TrendingDown size={16}/>Expenses · {periodLabel}</span><strong>{formatCurrency(current.expenses,currency)}</strong><small>{analytics?.changes?.expensesPercent == null ? "No comparable expense period" : `${analytics.changes.expensesPercent > 0 ? "+" : ""}${analytics.changes.expensesPercent.toFixed(1)}% vs previous period`}</small></article>
+        <article className="overview-card"><span className="overview-label"><CircleDollarSign size={16}/>Net savings · calculated</span><strong className={current.netSavings < 0 ? "negative-text" : "positive-text"}>{formatCurrency(current.netSavings,currency)}</strong><small>Recorded income minus expenses</small></article>
+        <article className="overview-card"><span className="overview-label"><Activity size={16}/>Savings rate</span><strong>{current.savingsRate == null ? "—" : `${current.savingsRate.toFixed(1)}%`}</strong><small>{current.savingsRate == null ? "Requires positive recorded income" : "Net savings ÷ recorded income"}</small></article>
+      </div>
+      {!current.transactionCount && <div className="analytics-empty"><CalendarDays size={22}/><div><strong>No transactions from {periodRangeLabel}</strong><p>{analytics.totalTransactions > 0 ? `You have ${analytics.totalTransactions} saved transaction${analytics.totalTransactions === 1 ? "" : "s"}, but none fall within this period. The chart below shows monthly activity from your recent history.` : "You have no saved transactions yet. Add a transaction to see your analysis."}</p></div></div>}
+      <div className="analytics-section-heading"><div><span className="eyebrow">ANALYTICS</span><h2>Spending patterns</h2></div><span className="section-period">{periodLabel} · {current.transactionCount} transactions</span></div>
+      <div className="analytics-charts">
+        <section className="premium-chart wide-chart"><div className="chart-heading"><div><h3>Income and expenses</h3><p>Monthly totals over the past 12 months</p></div><BarChart3 size={18}/></div><ResponsiveContainer width="100%" height={270}><AreaChart data={monthlyData} margin={{top:8,right:8,left:0,bottom:0}}><defs><linearGradient id="incomeFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#42c99a" stopOpacity={.22}/><stop offset="100%" stopColor="#42c99a" stopOpacity={0}/></linearGradient></defs><CartesianGrid stroke={grid} vertical={false}/><XAxis dataKey="label" stroke={axis} tickLine={false} axisLine={false} tick={{fontSize:11}}/><YAxis stroke={axis} tickLine={false} axisLine={false} tick={{fontSize:11}} tickFormatter={(value)=>new Intl.NumberFormat(undefined,{notation:"compact",currency,style:"currency",maximumFractionDigits:0}).format(value)}/><Tooltip {...tooltip}/><Legend/><Area type="monotone" dataKey="income" name="Income" stroke="#42c99a" fill="url(#incomeFill)" strokeWidth={2.4}/><Area type="monotone" dataKey="expenses" name="Expenses" stroke="#e87979" fill="transparent" strokeWidth={2.4}/></AreaChart></ResponsiveContainer></section>
+        <section className="premium-chart"><div className="chart-heading"><div><h3>Category mix</h3><p>Expenses in this {period}</p></div><TrendingDown size={18}/></div>{categories.length ? <ResponsiveContainer width="100%" height={270}><PieChart><Pie data={categories} dataKey="value" nameKey="name" innerRadius={58} outerRadius={88} paddingAngle={3} onClick={(entry)=>onOpenCategory?.(entry.name)}>{categories.map((entry,index)=><Cell key={entry.name} fill={COLORS[index%COLORS.length]}/>)}</Pie><Tooltip {...tooltip}/><Legend verticalAlign="bottom" height={36} wrapperStyle={{fontSize:11}}/></PieChart></ResponsiveContainer> : <div className="chart-empty">Expense categories will appear here once recorded.</div>}</section>
+        <section className="premium-chart wide-chart"><div className="chart-heading"><div><h3>Top spending categories</h3><p>Tap a category to inspect matching transactions</p></div><TrendingUp size={18}/></div>{categories.length ? <ResponsiveContainer width="100%" height={245}><BarChart data={categories.slice(0,6)} layout="vertical" margin={{top:4,right:16,left:10,bottom:0}}><CartesianGrid stroke={grid} horizontal={false}/><XAxis type="number" stroke={axis} tickLine={false} axisLine={false} tickFormatter={(value)=>new Intl.NumberFormat(undefined,{notation:"compact",maximumFractionDigits:0}).format(value)}/><YAxis type="category" dataKey="name" width={110} stroke={axis} tickLine={false} axisLine={false} tick={{fontSize:11}}/><Tooltip {...tooltip}/><Bar dataKey="value" name="Expenses" radius={[0,7,7,0]} onClick={(entry)=>onOpenCategory?.(entry.name)}>{categories.slice(0,6).map((entry,index)=><Cell key={entry.name} fill={COLORS[index%COLORS.length]}/>)}</Bar></BarChart></ResponsiveContainer> : <div className="chart-empty">No expenses recorded in this period.</div>}</section>
+      </div>
+      {(analytics?.largestTransactions || []).length > 0 && <section className="premium-chart largest-expenses"><div className="chart-heading"><div><h3>Largest recorded expenses</h3><p>Across your saved transaction history</p></div><Activity size={18}/></div><div className="largest-list">{analytics.largestTransactions.map((item)=><button className="largest-row" type="button" key={item.id || `${item.date}-${item.description}`} onClick={()=>onOpenCategory?.(item.category)}><span className="largest-row-info"><strong>{item.description}</strong><small>{item.category}{item.date ? ` · ${item.date}` : ""}</small></span><strong className="largest-row-amount">{formatCurrency(item.amount,currency)}</strong></button>)}</div></section>}      <div className="analytics-section-heading recommendations-heading"><div><span className="eyebrow">BASED ON YOUR ACTIVITY</span><h2>Insights & next steps</h2></div><Lightbulb size={20}/></div>
+      {analyticsLoading && <p className="refresh-note">Updating analysis…</p>}
+      {recommendations.length ? <div className="recommendation-list">{recommendations.slice(0,4).map(item=><RecommendationCard key={item.id} item={item} currency={currency} onOpen={onOpenCategory}/>)}</div> : <div className="analytics-empty"><Lightbulb size={22}/><div><strong>{current.transactionCount < 2 ? "More activity will unlock insights" : "No strong patterns detected"}</strong><p>{current.transactionCount < 2 ? "Add more transactions to build a useful comparison." : "Your current activity has no changes large enough to highlight."}</p></div></div>}
+    </> : null}
+  </div>;
 };
-
-const chartMargin = { top: 5, right: 10, left: 0, bottom: 5 };
-
-const yAxisProps = {
-  width: 55,
-  stroke: axisColor,
-  tickFormatter: formatNumber
-};
-  return (
-    <>
-      <div className="stats-grid">
-        <div className="stat-card">
-          <div className="stat-header">
-            <div>
-              <div className="stat-label">Total Income</div>
-              <div className="stat-value">₹{totalIncome.toLocaleString()}</div>
-              <div className="stat-change positive">
-                <TrendingUp size={14} />
-                <span>Stable</span>
-              </div>
-            </div>
-            <div className="stat-icon income">
-              <Wallet size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-header">
-            <div>
-              <div className="stat-label">Total Expenses</div>
-              <div className="stat-value">₹{totalExpenses.toLocaleString()}</div>
-              <div className={`stat-change ${expenseChangePercent > 0 ? "negative" : "positive"}`}>
-                {expenseChangePercent > 0 ? <TrendingUp size={14} /> : <TrendingDown size={14} />}
-                <span>{expenseChangePercent >= 0 ? "+" : ""}{expenseChangePercent.toFixed(1)}% vs last</span>
-              </div>
-            </div>
-            <div className="stat-icon expense">
-              <CreditCard size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-header">
-            <div>
-              <div className="stat-label">Total Savings</div>
-              <div className="stat-value">₹{totalSavings.toLocaleString()}</div>
-              <div className="stat-change positive">
-                <Target size={14} />
-                <span>{savingsRate}% rate</span>
-              </div>
-            </div>
-            <div className="stat-icon savings">
-              <DollarSign size={24} />
-            </div>
-          </div>
-        </div>
-
-        <div className="stat-card">
-          <div className="stat-header">
-            <div>
-              <div className="stat-label">Transactions</div>
-              <div className="stat-value">{transactions.length}</div>
-              <div className="stat-change positive">
-                <Activity size={14} />
-                <span>All time</span>
-              </div>
-            </div>
-            <div className="stat-icon">
-              <BarChart3 size={24} />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <div className="section-title">
-        <Lightbulb size={26} />
-        AI Insights
-      </div>
-      <div className="insights-grid">
-        {insights.map((insight, idx) => (
-          <div key={idx} className={`insight-card ${insight.type}`}>
-            <div className="insight-icon">{insight.icon}</div>
-            <div className="insight-content">
-              <h4>{insight.title}</h4>
-              <p>{insight.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="section-title">
-        <BarChart3 size={26} />
-        Financial Analytics
-      </div>
-
-      <div className="chart-card full-width">
-        <div className="chart-header">
-          <div className="chart-title">
-            <TrendingUp size={20} />
-            Year-wise Financial Overview
-          </div>
-          <div className="chart-subtitle">Income, Expenses & Savings Trends</div>
-        </div>
-        <ResponsiveContainer width="100%" height={360}>
-          <AreaChart data={yearlyData}  margin={chartMargin}>
-            <defs>
-              <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#10B981" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#10B981" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#EF4444" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#EF4444" stopOpacity={0} />
-              </linearGradient>
-              <linearGradient id="savingsGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#F59E0B" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#F59E0B" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
-            <XAxis dataKey="year" stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-md" />
-            <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-md" />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend className="chart-legend chart-legend-lg chart-legend-pad-20" />
-            <Area type="monotone" dataKey="income" stroke="#10B981" fillOpacity={1} fill="url(#incomeGrad)" strokeWidth={2.5} />
-            <Area type="monotone" dataKey="expenses" stroke="#EF4444" fillOpacity={1} fill="url(#expenseGrad)" strokeWidth={2.5} />
-            <Area type="monotone" dataKey="savings" stroke="#F59E0B" fillOpacity={1} fill="url(#savingsGrad)" strokeWidth={2.5} />
-          </AreaChart>
-        </ResponsiveContainer>
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <Calendar size={18} />
-              Monthly Income
-            </div>
-            <div className="chart-subtitle">Income trend ({latestYear})</div>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyData} margin={chartMargin}>
-                <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148,163,184,0.1)" : "rgba(148,163,184,0.2)"} />
-
-                <XAxis
-                  dataKey="label"
-                  stroke={axisColor}
-                  className="axis-sm"
-                />
-
-                <YAxis {...yAxisProps} className="axis-sm" />
-
-                <Tooltip content={<CustomTooltip />} />
-
-                <Line
-                  type="monotone"
-                  dataKey="income"
-                  stroke="#10B981"
-                  strokeWidth={2.5}
-                  dot={{ fill: "#10B981", r: 4 }}
-                  activeDot={{ r: 6 }}
-                />
-              </LineChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <TrendingDown size={18} />
-              Monthly Expenses
-            </div>
-            <div className="chart-subtitle">Spending trend ({latestYear})</div>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <LineChart data={monthlyData} margin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148,163,184,0.1)" : "rgba(148,163,184,0.2)"} />
-
-              <XAxis dataKey="label" stroke={axisColor} className="axis-sm" />
-
-              <YAxis {...yAxisProps} className="axis-sm" />
-
-              <Tooltip content={<CustomTooltip />} />
-
-              <Line
-                type="monotone"
-                dataKey="expenses"
-                stroke="#EF4444"
-                strokeWidth={2.5}
-                dot={{ fill: "#EF4444", r: 4 }}
-                activeDot={{ r: 6 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <PieIcon size={18} />
-              Category Distribution
-            </div>
-            <div className="chart-subtitle">Spending by category</div>
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <PieChart>
-              <Pie
-                data={categoryPercentageData}
-                cx="47%"
-                cy="50%"
-                outerRadius={80}
-                dataKey="value"
-                labelLine={false}
-              >
-                {categoryPercentageData.map((entry, idx) => (
-                  <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend
-                layout="vertical"
-                align="right"
-                verticalAlign="middle"
-                className="chart-legend chart-legend-sm"
-              />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <BarChart3 size={18} />
-              Top Categories
-            </div>
-            <div className="chart-subtitle">Highest spending areas</div>
-          </div>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={categoryData.slice(0, 6)} chartMargin={chartMargin}>
-              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
-              <XAxis dataKey="name" stroke={darkMode ? "#94A3B8" : "#64748B"} angle={-20} textAnchor="end" height={90} className="axis-xs" />
-              <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="value" radius={[6, 6, 0, 0]}>
-                {categoryData.slice(0, 6).map((entry, idx) => (
-                  <Cell key={`cell-${idx}`} fill={COLORS[idx % COLORS.length]} />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="charts-row">
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <Target size={18} />
-              Savings vs Expenses
-            </div>
-            <div className="chart-subtitle">Financial balance</div>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <PieChart>
-              <Pie
-                data={savingsVsSpendingData}
-                cx="50%"
-                cy="50%"
-                innerRadius={55}
-                outerRadius={90}
-                paddingAngle={4}
-                dataKey="value"
-              >
-                {savingsVsSpendingData.map((entry, idx) => (
-                  <Cell key={`cell-${idx}`} fill={entry.fill} />
-                ))}
-              </Pie>
-              <Tooltip content={<CustomTooltip />} />
-              <Legend className="chart-legend chart-legend-lg" />
-            </PieChart>
-          </ResponsiveContainer>
-        </div>
-
-        <div className="chart-card">
-          <div className="chart-header">
-            <div className="chart-title">
-              <Activity size={18} />
-              Monthly Savings
-            </div>
-            <div className="chart-subtitle">Savings trend ({latestYear})</div>
-          </div>
-          <ResponsiveContainer width="100%" height={280}>
-            <BarChart data={monthlyData}>
-              <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
-              <XAxis dataKey="label" stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
-              <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-sm" />
-              <Tooltip content={<CustomTooltip />} />
-              <Bar dataKey="savings" fill="#F59E0B" radius={[6, 6, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      <div className="chart-card full-width">
-        <div className="chart-header">
-          <div className="chart-title">
-            <BarChart3 size={20} />
-            Income vs Expenses Comparison
-          </div>
-          <div className="chart-subtitle">Monthly overview ({latestYear})</div>
-        </div>
-        <ResponsiveContainer width="100%" height={340}>
-          <BarChart data={monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" stroke={darkMode ? "rgba(148, 163, 184, 0.1)" : "rgba(148, 163, 184, 0.2)"} />
-            <XAxis dataKey="label" stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-md" />
-            <YAxis stroke={darkMode ? "#94A3B8" : "#64748B"} className="axis-md" />
-            <Tooltip content={<CustomTooltip />} />
-            <Legend className="chart-legend chart-legend-lg chart-legend-pad-16" />
-            <Bar dataKey="income" fill="#10B981" radius={[6, 6, 0, 0]} />
-            <Bar dataKey="expenses" fill="#EF4444" radius={[6, 6, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
-      </div>
-    </>
-  );
-};
-
 export default DashboardTab;

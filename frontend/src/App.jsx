@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Capacitor } from '@capacitor/core';
 import { PieChart as PieIcon, CreditCard, Target, User, Settings, Shield, Sparkles, Tags, Camera } from 'lucide-react';
 import AuthPage from './components/AuthPage';
 import AppHeader from './components/AppHeader';
@@ -25,12 +26,17 @@ import {
 import './styles/App.css';
 
 const SmartSpend = () => {
-  const API_BASE = process.env.REACT_APP_API_BASE || "https://smart-spend-ho8v.onrender.com/api";
+  const isLocalBrowser = typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname) && !Capacitor.isNativePlatform();
+  const API_BASE = process.env.REACT_APP_API_BASE || (isLocalBrowser ? "http://localhost:5000/api" : "https://smart-spend-ho8v.onrender.com/api");
   const [darkMode, setDarkMode] = useState(true);
   const [activeTab, setActiveTab] = useState('dashboard');
   const [transactions, setTransactions] = useState([]);
+  const [analyticsPeriod, setAnalyticsPeriod] = useState("month");
+  const [analytics, setAnalytics] = useState(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState("");
+  const [analyticsRefresh, setAnalyticsRefresh] = useState(0);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
   const [selectedCategory, setSelectedCategory] = useState('All');
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -216,7 +222,6 @@ const SmartSpend = () => {
       setTransactions(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error("Backend not reachable");
-      setError("Backend not reachable");
       setTransactions([]);
     } finally {
       setLoading(false);
@@ -285,6 +290,7 @@ const SmartSpend = () => {
   useEffect(() => {
     if (authStatus !== "authenticated" || !authToken) {
       setTransactions([]);
+      setAnalytics(null);
       setLoading(false);
       setProfileData(null);
       return;
@@ -292,6 +298,22 @@ const SmartSpend = () => {
     fetchTransactions(authToken);
     fetchProfile(authToken);
   }, [authStatus, authToken]);
+
+  useEffect(() => {
+    if (!isAuthenticated || !authToken || loading) return undefined;
+    const controller = new AbortController();
+    setAnalyticsLoading(true);
+    setAnalyticsError("");
+    fetch(`${API_BASE}/analytics/summary?period=${analyticsPeriod}`, { headers: { Authorization: `Bearer ${authToken}` }, signal: controller.signal })
+      .then(async (res) => {
+        if (!res.ok) { const body = await res.json().catch(() => ({})); throw new Error(body.message || "Could not load analytics"); }
+        return res.json();
+      })
+      .then((data) => setAnalytics(data))
+      .catch((err) => { if (err.name !== "AbortError") setAnalyticsError(err.message || "Could not load analytics"); })
+      .finally(() => { if (!controller.signal.aborted) setAnalyticsLoading(false); });
+    return () => controller.abort();
+  }, [API_BASE, analyticsPeriod, analyticsRefresh, authToken, isAuthenticated, loading, transactions]);
 
   useEffect(() => {
     if (!profileData) return;
@@ -357,12 +379,6 @@ const SmartSpend = () => {
       }
     };
   }, []);
-
-  // Calculate statistics
-  const totalIncome = transactions.filter(t => t.amount > 0).reduce((sum, t) => sum + t.amount, 0);
-  const totalExpenses = Math.abs(transactions.filter(t => t.amount < 0).reduce((sum, t) => sum + t.amount, 0));
-  const totalSavings = totalIncome - totalExpenses;
-  const savingsRate = totalIncome > 0 ? ((totalSavings / totalIncome) * 100).toFixed(1) : 0;
 
   const getCategoryFromDescription = (desc = "") => {
     const d = desc
@@ -577,137 +593,6 @@ const SmartSpend = () => {
     }
     return rawCategory;
   };
-
-  // Category breakdown
-  const categoryData = transactions
-    .filter(t => t.amount < 0)
-    .reduce((acc, t) => {
-      const category = resolveCategory(t);
-      const existing = acc.find(item => item.name === category);
-      if (existing) {
-        existing.value += Math.abs(t.amount);
-      } else {
-        acc.push({ name: category, value: Math.abs(t.amount) });
-      }
-      return acc;
-    }, [])
-    .sort((a, b) => b.value - a.value);
-
-  // Year-wise aggregation
-  const yearlyData = Object.values(
-    transactions.reduce((acc, tx) => {
-      if (!tx.date) return acc;
-      const [day, month, year] = tx.date.split("/");
-      const yearKey = year;
-      if (!acc[yearKey]) {
-        acc[yearKey] = { year: yearKey, income: 0, expenses: 0, savings: 0 };
-      }
-      if (tx.amount > 0) {
-        acc[yearKey].income += tx.amount;
-      } else {
-        acc[yearKey].expenses += Math.abs(tx.amount);
-      }
-      acc[yearKey].savings = acc[yearKey].income - acc[yearKey].expenses;
-      return acc;
-    }, {})
-  ).sort((a, b) => a.year - b.year);
-
-  // Get latest year
-  const years = transactions
-    .map(tx => {
-      if (!tx.date) return null;
-      const [d, m, y] = tx.date.split("/");
-      return Number(y);
-    })
-    .filter(Boolean);
-  const latestYear = years.length ? Math.max(...years) : null;
-
-  // Monthly data
-  const monthlyData = Object.values(
-    transactions.reduce((acc, tx) => {
-      if (!tx.date) return acc;
-      const [day, month, year] = tx.date.split("/");
-      const date = new Date(`${year}-${month}-${day}`);
-      if (isNaN(date)) return acc;
-      const monthIndex = date.getMonth();
-      const key = `${year}-${monthIndex}`;
-      if (!acc[key]) {
-        acc[key] = {
-          year: Number(year),
-          monthIndex,
-          month: date.toLocaleString("default", { month: "short" }),
-          label: `${date.toLocaleString("default", { month: "short" })} ${year}`,
-          income: 0,
-          expenses: 0,
-          savings: 0
-        };
-      }
-      if (tx.amount > 0) {
-        acc[key].income += tx.amount;
-      } else {
-        acc[key].expenses += Math.abs(tx.amount);
-      }
-      acc[key].savings = acc[key].income - acc[key].expenses;
-      return acc;
-    }, {})
-  ).sort((a, b) =>
-    a.year !== b.year ? a.year - b.year : a.monthIndex - b.monthIndex
-  );
-
-  // Expense change calculation
-  const sortedMonthly = [...monthlyData].sort(
-    (a, b) => (a.year - b.year) || (a.monthIndex - b.monthIndex)
-  );
-  const currentMonth = sortedMonthly[sortedMonthly.length - 1];
-  const previousMonth = sortedMonthly[sortedMonthly.length - 2];
-  const currentExpenses = currentMonth?.expenses || 0;
-  const previousExpenses = previousMonth?.expenses || 0;
-  let expenseChangePercent = 0;
-  if (previousExpenses > 0) {
-    expenseChangePercent = ((currentExpenses - previousExpenses) / previousExpenses) * 100;
-  }
-
-  // Category percentage data
-  const totalCategoryExpenses = categoryData.reduce((sum, cat) => sum + cat.value, 0);
-  const categoryPercentageData = categoryData.map(cat => ({
-    ...cat,
-    percentage: totalCategoryExpenses > 0 ? ((cat.value / totalCategoryExpenses) * 100).toFixed(1) : "0.0"
-  }));
-
-  // Savings vs Spending comparison
-  const savingsVsSpendingData = [
-    { name: 'Savings', value: totalSavings > 0 ? totalSavings : 0, fill: '#10B981' },
-    { name: 'Expenses', value: totalExpenses, fill: '#EF4444' }
-  ];
-
-  const COLORS = ['#6366F1', '#8B5CF6', '#EC4899', '#F59E0B', '#10B981', '#3B82F6', '#14B8A6', '#F97316'];
-
-  const insights = [
-    {
-      icon: '🍔',
-      title: 'Dining Analysis',
-      description: `Food & Dining: ₹${categoryData.find(c => c.name === 'Food & Dining')?.value.toLocaleString() || 0} this period`,
-      type: 'warning'
-    },
-    {
-      icon: '💰',
-      title: 'Savings Performance',
-      description: `You saved ${savingsRate}% of your income. ${savingsRate > 50 ? 'Excellent!' : 'Room for improvement.'}`,
-      type: 'success'
-    },
-    {
-      icon: '📊',
-      title: 'Top Category',
-      description: `${categoryData[0]?.name || 'N/A'}: ₹${categoryData[0]?.value.toLocaleString() || 0} (highest)`,
-      type: 'info'
-    },
-    {
-      icon: '🎯',
-      title: 'Optimization Tip',
-      description: 'Focus on top 3 categories to unlock ₹10,000+ monthly savings',
-      type: 'tip'
-    }
-  ];
 
   const handleFileUpload = async () => {
     if (!selectedFile) return alert("Please select a file");
@@ -1017,6 +902,7 @@ const SmartSpend = () => {
       setUser(null);
       setAuthStatus("guest");
       setTransactions([]);
+      setAnalytics(null);
       setLinkedAccounts([]);
       setActiveTab("dashboard");
       setShowUploadModal(false);
@@ -1024,6 +910,10 @@ const SmartSpend = () => {
     }
   };
 
+  const openInsightTransactions = (category) => {
+    setSelectedCategory(category || "All");
+    setActiveTab("transactions");
+  };
   const openDeleteModal = (tx) => {
     setDeleteTarget(tx);
     setDeleteError("");
@@ -1428,46 +1318,6 @@ const SmartSpend = () => {
     }
   };
 
-  const getTooltipColorClass = (color = "") => {
-    switch (color.toLowerCase()) {
-      case "#10b981":
-        return "tooltip-color-emerald";
-      case "#ef4444":
-        return "tooltip-color-red";
-      case "#f59e0b":
-        return "tooltip-color-amber";
-      case "#6366f1":
-        return "tooltip-color-indigo";
-      case "#8b5cf6":
-        return "tooltip-color-violet";
-      case "#ec4899":
-        return "tooltip-color-pink";
-      case "#3b82f6":
-        return "tooltip-color-blue";
-      case "#14b8a6":
-        return "tooltip-color-teal";
-      case "#f97316":
-        return "tooltip-color-orange";
-      default:
-        return "tooltip-color-default";
-    }
-  };
-
-  const CustomTooltip = ({ active, payload, label }) => {
-    if (!active || !payload || payload.length === 0) return null;
-
-    return (
-      <div className="custom-tooltip">
-        <p className="custom-tooltip-label">{label}</p>
-        {payload.map((entry, index) => (
-          <p key={index} className={`custom-tooltip-row ${getTooltipColorClass(entry.color || "")}`}>
-            {entry.name}: ₹{entry.value.toLocaleString()}
-          </p>
-        ))}
-      </div>
-    );
-  };
-
   const displayProfile = profileData || user || {};
   const avatarInitial = displayProfile?.name ? displayProfile.name.trim().charAt(0).toUpperCase() : "U";
 
@@ -1517,22 +1367,15 @@ const SmartSpend = () => {
 
             {activeTab === 'dashboard' && (
               <DashboardTab
-                totalIncome={totalIncome}
-                totalExpenses={totalExpenses}
-                totalSavings={totalSavings}
-                savingsRate={savingsRate}
-                expenseChangePercent={expenseChangePercent}
-                transactions={transactions}
-                insights={insights}
-                yearlyData={yearlyData}
-                monthlyData={monthlyData}
-                latestYear={latestYear}
-                categoryPercentageData={categoryPercentageData}
-                categoryData={categoryData}
-                savingsVsSpendingData={savingsVsSpendingData}
+                analytics={analytics}
+                analyticsLoading={analyticsLoading}
+                analyticsError={analyticsError}
+                onRetry={() => setAnalyticsRefresh((value) => value + 1)}
+                period={analyticsPeriod}
+                setPeriod={setAnalyticsPeriod}
+                currency={profileData?.currency || user?.currency || "INR"}
+                onOpenCategory={openInsightTransactions}
                 darkMode={darkMode}
-                COLORS={COLORS}
-                CustomTooltip={CustomTooltip}
               />
             )}
 
@@ -1555,8 +1398,10 @@ const SmartSpend = () => {
 
             {activeTab === 'insights' && (
               <InsightsTab
-                insights={insights}
-                savingsRate={savingsRate}
+                analytics={analytics}
+                currency={profileData?.currency || user?.currency || "INR"}
+                analyticsLoading={analyticsLoading}
+                onOpenCategory={openInsightTransactions}
               />
             )}
 

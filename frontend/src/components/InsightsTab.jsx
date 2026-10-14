@@ -1,46 +1,11 @@
 import React from "react";
 import { Lightbulb } from "lucide-react";
-
-const InsightsTab = ({ insights, savingsRate }) => {
-  return (
-    <>
-      <div className="section-title">
-        <Lightbulb size={26} />
-        Insights & Recommendations
-      </div>
-      <div className="insights-grid">
-        {insights.map((insight, idx) => (
-          <div key={idx} className={`insight-card ${insight.type}`}>
-            <div className="insight-icon">{insight.icon}</div>
-            <div className="insight-content">
-              <h4>{insight.title}</h4>
-              <p>{insight.description}</p>
-            </div>
-          </div>
-        ))}
-      </div>
-
-      <div className="chart-card">
-        <div className="chart-header">
-          <div className="chart-title">Financial Health Score</div>
-          <div className="chart-subtitle">Based on savings rate and spending patterns</div>
-        </div>
-        <div className="health-score-wrap">
-          <div className="health-score-value">{Math.round(Math.min(100, savingsRate * 1.2))}</div>
-          <div className="health-score-label">
-            {savingsRate > 60
-              ? "\uD83C\uDF89 Excellent"
-              : savingsRate > 40
-                ? "\uD83D\uDC4D Good"
-                : savingsRate > 20
-                  ? "\uD83D\uDCC8 Fair"
-                  : "\u26A0\uFE0F Needs Work"}
-          </div>
-        </div>
-      </div>
-    </>
-  );
+import RecommendationCard from "./RecommendationCard";
+const InsightsTab = ({ analytics, currency, analyticsLoading, onOpenCategory }) => {
+  const recommendations = analytics?.recommendations || [];
+  return <section className="insights-page"><header className="dashboard-intro"><div><span className="eyebrow">PERSONALIZED ANALYSIS</span><h1>Insights & recommendations</h1><p>Each observation is calculated from your saved transactions.</p></div></header>
+    {analyticsLoading && <div className="analytics-loading-line">Refreshing insights…</div>}
+    {recommendations.length ? <div className="recommendation-list">{recommendations.map(item=><RecommendationCard key={item.id} item={item} currency={currency} onOpen={onOpenCategory}/>)}</div> : <div className="analytics-empty"><Lightbulb size={22}/><div><strong>{analytics?.totalTransactions ? "No actionable patterns yet" : "Start with your first transaction"}</strong><p>{analytics?.totalTransactions ? "More history may reveal useful changes or recurring activity." : "Your insights will be based on activity you add or import."}</p></div></div>}
+  </section>;
 };
-
 export default InsightsTab;
-
